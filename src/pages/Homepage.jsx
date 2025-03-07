@@ -1,6 +1,7 @@
 
 import ChatList from '../components/ChatList';
 import Navbar from '../components/Navbar';
+import ChatBox from '../components/ChatBox';
 
 
 
@@ -17,6 +18,7 @@ export default function HomePage() {
 
 
                 <ChatList />
+                <ChatBox/>
             </div>
         </div>
     );
