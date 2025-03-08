@@ -1,53 +1,58 @@
 package main
 
 import (
-    "bufio"
+  //  "bufio"
     "fmt"
-    "log"
-    "net"
+   "encoding/json"
+  //  "log"
+  "io"
+  //  "net"
     "net/http"
     //"strings"
+    "sync"
+     "github.com/rs/cors"
 )
 
 
 func handle_incoming(w http.ResponseWriter, req *http.Request) {
-    fmt.Println(req.Body)
+   var data map[string]interface{}      // need me a JSON
+
+   body_text, read_err := io.ReadAll(req.Body)
+    if read_err != nil {
+        http.Error(w, "Failure reading request", http.StatusBadRequest)
+        return
+    }
+
+   err := json.Unmarshal(body_text, &data)
+   if err != nil {
+       http.Error(w, "Failure converting request to JSON", http.StatusBadRequest)
+       return
+
+
+   }
+
+   fmt.Println(data)
+    w.WriteHeader(http.StatusOK)
 }
 
 
-func handleConnection(conn net.Conn) {
-    defer conn.Close()
-    for {
-        http.Handle("/foo", fooHandler)
-
-        http.HandleFunc("/bar", func(w http.ResponseWriter, r *http.Request) {
-            fmt.Fprintf(w, "Hello, %q", html.EscapeString(r.URL.Path))
-        })
-        
-        log.Fatal(http.ListenAndServe(":8080", nil))
-        if err != nil {
-            log.Println("Connection error:", err)
-            return 
-        }
-        fmt.Print("Message Received: ", message)
-    }
+func httpThread() {
+    serv := http.NewServeMux()
+    serv.HandleFunc("/incoming", handle_incoming)
+    http.ListenAndServe("127.0.0.1:8090", cors.Default().Handler(serv))
 }
 
 func main() {
-    http.HandleFunc("/hello", hello)
-    http.HandleFunc("/headers", headers)
 
-    ln, err := net.Listen("tcp", "localhost:8000")
-    if err != nil {
-        log.Fatal(err)
-    }
-    fmt.Println("Listening for front-end 8000")
 
-    conn, err := ln.Accept()
-    if err != nil {
-        log.Println("Connection accept error:", err)
-    }
 
-    go handleConnection(conn)
+    var wg sync.WaitGroup
+    wg.Add(1) 
+    go httpThread()
+
+
+
+
+    wg.Wait()
     
 }
