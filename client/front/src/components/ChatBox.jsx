@@ -121,7 +121,9 @@ export const ChatBubble = forwardRef((props, ref) => {
 })
 
 class Message {
-    constructor(msg, timestamp, recv) {
+    constructor(from, to, msg, timestamp, recv) {
+        this.from = from;
+        this.to = to;
         this.msg = msg;
         this.timestamp = timestamp;
         this.recv = recv;
@@ -137,13 +139,13 @@ export default function ChatBox() {
 
 
     const [msgHistory, setMsgHistory] = useState([
-        new Message("This is a very long testing message that I really hope works nicely fingers crossed", "7:58pm", false),
-        new Message("Nice! A response was received", "7:58pm", true),
-        new Message("Excellent, glad to hear it!", "7:58pm", false),
-        new Message("Nice! A response was received", "7:58pm", true),
-        new Message("Nice! A response was received", "7:58pm", true),
-        new Message("Nice! A response was received", "7:58pm", true),
-        new Message("Excellent, glad to hear it!", "7:58pm", false)
+        new Message("Test", "Test", "This is a very long testing message that I really hope works nicely fingers crossed", "7:58pm", false),
+        new Message("Test", "Test", "Nice! A response was received", "7:58pm", true),
+        new Message("Test", "Test", "Excellent, glad to hear it!", "7:58pm", false),
+        new Message("Test", "Test", "Nice! A response was received", "7:58pm", true),
+        new Message("Test", "Test", "Nice! A response was received", "7:58pm", true),
+        new Message("Test", "Test", "Nice! A response was received", "7:58pm", true),
+        new Message("Test", "Test", "Excellent, glad to hear it!", "7:58pm", false)
     ]);
 
     const [currentInput, setCurrentInput] = useState("");
@@ -163,9 +165,11 @@ export default function ChatBox() {
 
     const sendInputToBack = (_msg) => {
         var req_body = {
-            recip: "TEST",
+            from: _msg.from,
+            to: _msg.to,
             msg: _msg.msg,
-            timestamp: _msg.timestamp
+            timestamp: _msg.timestamp,
+            acked: 0
         }
         const options = {
             method: "POST",
@@ -182,6 +186,8 @@ export default function ChatBox() {
         e.preventDefault();
         var now = new Date();
         var to_send = new Message(
+            0,
+            1,
             currentInput, 
             `${now.getHours()}:${new String(now.getMinutes()).padStart(2, "0")}`, 
             false

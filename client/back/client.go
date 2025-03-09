@@ -1,20 +1,43 @@
 package main
 
 import (
-  //  "bufio"
-    "fmt"
-   "encoding/json"
-  //  "log"
-  "io"
-  //  "net"
-    "net/http"
-    //"strings"
-    "sync"
-     "github.com/rs/cors"
+	//  "bufio"
+	"encoding/json"
+	"fmt"
+	"log"
+
+	//  "log"
+	"io"
+	//  "net"
+	"net/http"
+	//"strings"
+	"database/sql"
+	"net/rpc"
+	"sync"
+
+	"github.com/rs/cors"
 )
 
 
-func handle_incoming(w http.ResponseWriter, req *http.Request) {
+
+type ChatMessage struct {
+    Message string
+    Timestamp string
+    From int         // email = key?
+    To int           // email = key?
+	Acked int			// bool 0 | 1
+}
+
+type MessageHandler struct {
+	mutex sync.Mutex
+    db *sql.DB
+}
+
+
+const RPC_ADDRESS = "127.0.0.1:9999"    // localhost for now
+
+
+func HandleIncoming(w http.ResponseWriter, req *http.Request) {
    var data map[string]interface{}      // need me a JSON
 
    body_text, read_err := io.ReadAll(req.Body)
@@ -27,8 +50,26 @@ func handle_incoming(w http.ResponseWriter, req *http.Request) {
    if err != nil {
        http.Error(w, "Failure converting request to JSON", http.StatusBadRequest)
        return
+   }
 
+   message, _ := data["msg"].(string)
+   timestamp, _ := data["timestamp"].(string)
+   from, _ := data["from"].(int)
+   to, _ := data["to"].(int)
 
+   messageToBack := &ChatMessage{
+    Message:       message,
+    Timestamp: timestamp,
+    From:      from,
+    To:        to,
+    Acked:    0,
+}
+
+   var response string
+
+   rpc_client.Go("MessageHandler.SaveMessage", messageToBack, &response, nil)
+   if response != ""  {
+    log.Fatal("Error response from SaveMessage RPC ", response)
    }
 
    fmt.Println(data)
@@ -36,19 +77,28 @@ func handle_incoming(w http.ResponseWriter, req *http.Request) {
 }
 
 
-func httpThread() {
+func HTTPThread() {
     serv := http.NewServeMux()
-    serv.HandleFunc("/incoming", handle_incoming)
+    serv.HandleFunc("/incoming", HandleIncoming)
     http.ListenAndServe("127.0.0.1:8090", cors.Default().Handler(serv))
 }
 
+
+var rpc_client *rpc.Client
+
+
 func main() {
+    var err error
+    rpc_client, err = rpc.Dial("tcp", RPC_ADDRESS)
+    if err != nil {
+        log.Fatal("Failed to connect to RPC", err)
+    }
 
-
-
+    fmt.Println("RPC connection succeeded.")
+    fmt.Println(rpc_client)
     var wg sync.WaitGroup
     wg.Add(1) 
-    go httpThread()
+    go HTTPThread()
 
 
 
