@@ -3,99 +3,6 @@ import { Description, Field, Label, Textarea } from '@headlessui/react'
 import { ArrowUpRightIcon } from "@heroicons/react/24/outline";
 import {BACK_END_PORT, INCOMING_ROUTE} from '../const';
 import clsx from 'clsx'
-const people = [
-    {
-        name: 'Leslie Alexander',
-        email: 'leslie.alexander@example.com',
-        role: 'Co-Founder / CEO',
-        imageUrl:
-            'https://images.unsplash.com/photo-1494790108377-be9c29b29330?ixlib=rb-1.2.1&ixid=eyJhcHBfaWQiOjEyMDd9&auto=format&fit=facearea&facepad=2&w=256&h=256&q=80',
-        lastSeen: '3h ago',
-        lastSeenDateTime: '2023-01-23T13:23Z',
-    },
-    {
-        name: 'Leslie Alexander',
-        email: 'leslie.alexander@example.com',
-        role: 'Co-Founder / CEO',
-        imageUrl:
-            'https://images.unsplash.com/photo-1494790108377-be9c29b29330?ixlib=rb-1.2.1&ixid=eyJhcHBfaWQiOjEyMDd9&auto=format&fit=facearea&facepad=2&w=256&h=256&q=80',
-        lastSeen: '3h ago',
-        lastSeenDateTime: '2023-01-23T13:23Z',
-    },
-    {
-        name: 'Leslie Alexander',
-        email: 'leslie.alexander@example.com',
-        role: 'Co-Founder / CEO',
-        imageUrl:
-            'https://images.unsplash.com/photo-1494790108377-be9c29b29330?ixlib=rb-1.2.1&ixid=eyJhcHBfaWQiOjEyMDd9&auto=format&fit=facearea&facepad=2&w=256&h=256&q=80',
-        lastSeen: '3h ago',
-        lastSeenDateTime: '2023-01-23T13:23Z',
-    },
-    {
-        name: 'Leslie Alexander',
-        email: 'leslie.alexander@example.com',
-        role: 'Co-Founder / CEO',
-        imageUrl:
-            'https://images.unsplash.com/photo-1494790108377-be9c29b29330?ixlib=rb-1.2.1&ixid=eyJhcHBfaWQiOjEyMDd9&auto=format&fit=facearea&facepad=2&w=256&h=256&q=80',
-        lastSeen: '3h ago',
-        lastSeenDateTime: '2023-01-23T13:23Z',
-    },
-    {
-        name: 'Leslie Alexander',
-        email: 'leslie.alexander@example.com',
-        role: 'Co-Founder / CEO',
-        imageUrl:
-            'https://images.unsplash.com/photo-1494790108377-be9c29b29330?ixlib=rb-1.2.1&ixid=eyJhcHBfaWQiOjEyMDd9&auto=format&fit=facearea&facepad=2&w=256&h=256&q=80',
-        lastSeen: '3h ago',
-        lastSeenDateTime: '2023-01-23T13:23Z',
-    },
-
-    {
-        name: 'Leslie Alexander',
-        email: 'leslie.alexander@example.com',
-        role: 'Co-Founder / CEO',
-        imageUrl:
-            'https://images.unsplash.com/photo-1494790108377-be9c29b29330?ixlib=rb-1.2.1&ixid=eyJhcHBfaWQiOjEyMDd9&auto=format&fit=facearea&facepad=2&w=256&h=256&q=80',
-        lastSeen: '3h ago',
-        lastSeenDateTime: '2023-01-23T13:23Z',
-    },
-
-    {
-        name: 'Leslie Alexander',
-        email: 'leslie.alexander@example.com',
-        role: 'Co-Founder / CEO',
-        imageUrl:
-            'https://images.unsplash.com/photo-1494790108377-be9c29b29330?ixlib=rb-1.2.1&ixid=eyJhcHBfaWQiOjEyMDd9&auto=format&fit=facearea&facepad=2&w=256&h=256&q=80',
-        lastSeen: '3h ago',
-        lastSeenDateTime: '2023-01-23T13:23Z',
-    },
-    {
-        name: 'Leslie Alexander',
-        email: 'leslie.alexander@example.com',
-        role: 'Co-Founder / CEO',
-        imageUrl:
-            'https://images.unsplash.com/photo-1494790108377-be9c29b29330?ixlib=rb-1.2.1&ixid=eyJhcHBfaWQiOjEyMDd9&auto=format&fit=facearea&facepad=2&w=256&h=256&q=80',
-        lastSeen: '3h ago',
-        lastSeenDateTime: '2023-01-23T13:23Z',
-    },
-
-
-    {
-        name: 'Leslie Alexander',
-        email: 'leslie.alexander@example.com',
-        role: 'Co-Founder / CEO',
-        imageUrl:
-            'https://images.unsplash.com/photo-1494790108377-be9c29b29330?ixlib=rb-1.2.1&ixid=eyJhcHBfaWQiOjEyMDd9&auto=format&fit=facearea&facepad=2&w=256&h=256&q=80',
-        lastSeen: '3h ago',
-        lastSeenDateTime: '2023-01-23T13:23Z',
-    },
-
-
-
-
-
-
-]
 
 
 
@@ -121,12 +28,12 @@ export const ChatBubble = forwardRef((props, ref) => {
 })
 
 class Message {
-    constructor(from, to, msg, timestamp, recv) {
+    constructor(from, to, msg, timestamp, acked) {
         this.from = from;
         this.to = to;
         this.msg = msg;
         this.timestamp = timestamp;
-        this.recv = recv;
+        this.acked = acked;
     }
 }
 
@@ -135,18 +42,9 @@ class Message {
 
 export default function ChatBox() {
 
-    
+    const {renderedMessages, setRenderedMessages} = useGlobal([])
 
 
-    const [msgHistory, setMsgHistory] = useState([
-        new Message("Test", "Test", "This is a very long testing message that I really hope works nicely fingers crossed", "7:58pm", false),
-        new Message("Test", "Test", "Nice! A response was received", "7:58pm", true),
-        new Message("Test", "Test", "Excellent, glad to hear it!", "7:58pm", false),
-        new Message("Test", "Test", "Nice! A response was received", "7:58pm", true),
-        new Message("Test", "Test", "Nice! A response was received", "7:58pm", true),
-        new Message("Test", "Test", "Nice! A response was received", "7:58pm", true),
-        new Message("Test", "Test", "Excellent, glad to hear it!", "7:58pm", false)
-    ]);
 
     const [currentInput, setCurrentInput] = useState("");
 
@@ -194,7 +92,7 @@ export default function ChatBox() {
         );
         sendInputToBack(to_send);
         setCurrentInput("");
-        setMsgHistory(prev => [...prev, to_send]);
+        setRenderedMessages(prev => [...prev, to_send]);
 
 
     }
@@ -206,7 +104,7 @@ export default function ChatBox() {
                 Messages
             </text>
             <ul role="list" className=" shadow-md rounded-xl h-96 overflow-auto">
-                {msgHistory.map((_msg, index) => (
+                {renderedMessages.map((_msg, index) => (
                     <li key={index}>
                         <ChatBubble  ref={index === msgHistory.length - 1 ? latestMessage : null}
                          msg={_msg.msg} timestamp={_msg.timestamp} recv={_msg.recv} />

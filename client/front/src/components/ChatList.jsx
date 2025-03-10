@@ -28,6 +28,8 @@ export const ChatContact = (props) => {
 export default function ChatList() {
 
     const {userProfile, setUserProfile} = useGlobal()
+
+    const {selectedContactId, setSelectedContactId} = useGlobal()
     
     const [contacts, setContacts] = useState([])
 
@@ -57,6 +59,11 @@ export default function ChatList() {
             
         }
 
+
+    const SetContact = () => {
+
+    }
+
     useEffect(() => {
         if (contacts.length === 0) {
            GetContacts();
@@ -73,7 +80,10 @@ export default function ChatList() {
             </text>
             <ul role="list" className="divide-y divide-gray-100 border-solid shadow-md rounded-xl h-96 overflow-auto">
                 {contacts.map((person) => (
+                    <button className="block w-full text-left hover:bg-gray-100 bg-transparent border-0 p-0 m-0 outline-none focus:outline-none"
+                    onClick={() => setSelectedContactId(person.UserId)}>
                    <ChatContact
+                   userid={person.UserId}
                    name={`${person.Firstname} ${person.Lastname}`}
                    email={person.Email}
                    role={person.Descr}
@@ -81,6 +91,7 @@ export default function ChatList() {
                    lastSeenDateTime={""}
                             
                    />
+                   </button>
                     
                 ))}
             </ul>

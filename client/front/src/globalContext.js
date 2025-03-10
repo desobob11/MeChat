@@ -4,9 +4,11 @@ const GlobalContext = createContext();
 
 export const GlobalProvider = ({ children }) => {
   const [userProfile, setUserProfile] = useState({UserId:1,Email:"admin@admin.ca",Firstname:"admin",Lastname:"admin",Descr:"Student"});
+  const [selectedContactId, setSelectedContactId] = useState(-1);
+  const [renderedMessages, setRenderedMessages] = useState([]);
 
   return (
-    <GlobalContext.Provider value={{ userProfile, setUserProfile }}>
+    <GlobalContext.Provider value={{ userProfile, setUserProfile, selectedContactId, setSelectedContactId }}>
       {children}
     </GlobalContext.Provider>
   );
