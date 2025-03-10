@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 
+    "encoding/hex"
 	//  "log"
 	"io"
 	//  "net"
@@ -27,6 +28,10 @@ type ChatMessage struct {
     From int         // email = key?
     To int           // email = key?
 	Acked int			// bool 0 | 1
+}
+
+type RPCResponse struct {
+	Message string
 }
 
 type CreateAccountMessage struct {
@@ -70,9 +75,9 @@ func HandleIncoming(w http.ResponseWriter, req *http.Request) {
     To:        to,
     Acked:    0,
 }
-   var response string
-   rpc_client.Call("MessageHandler.SaveMessage", messageToBack, &response)
-   if response != "ACK"  {
+    var response string
+   resp := rpc_client.Call("MessageHandler.SaveMessage", messageToBack, &response)
+   if resp != nil  {
     fmt.Println("Error response from SaveMessage RPC ", response)
     w.WriteHeader(http.StatusBadRequest)
    } else {
@@ -112,7 +117,7 @@ func CreateAccount(w http.ResponseWriter, req *http.Request) {
     h := sha256.New()
     h.Write([]byte(pass))
 
-    hash_pass := string(h.Sum(nil))
+    hash_pass := hex.EncodeToString(h.Sum(nil))
 
     messageToBack := &CreateAccountMessage{
      Email:       email,
@@ -123,13 +128,16 @@ func CreateAccount(w http.ResponseWriter, req *http.Request) {
  }
 
 
-    var response string
-    rpc_client.Call("MessageHandler.CreateAccount", messageToBack, &response)
-    if response != "ACK"  {
-     fmt.Println("Error response from SaveMessage RPC ", response);
+    var response RPCResponse
+    resp := rpc_client.Call("MessageHandler.CreateAccount", messageToBack, &response)
+
+    
+    if resp != nil  {
+     fmt.Println("Error response from create user RPC ", response);
      w.WriteHeader(http.StatusBadRequest)
     } else {
         w.WriteHeader(http.StatusOK)
+        w.Write([]byte(response.Message))           // give userid back to front end
     }
  }
 

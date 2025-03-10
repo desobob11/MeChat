@@ -11,10 +11,14 @@ import {
 import {Helmet} from "react-helmet"
 import LoginPage from './pages/LoginPage.jsx';
 import RegisterPage from './pages/RegisterPage.jsx';
+import { GlobalProvider } from './globalContext.js';
 
+
+export 
 
 function App() {
   return (
+    <GlobalProvider>
     <div>
     <Helmet>
       <meta name="theme-color" content="#673AAC" />
@@ -28,6 +32,7 @@ function App() {
       </Routes>
     </Router>
     </div>
+    </GlobalProvider>
   );
 }
 
