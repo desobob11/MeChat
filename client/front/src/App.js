@@ -26,9 +26,10 @@ function App() {
     <Router>
 
       <Routes>
-      <Route path="/home" element={<LoginPage/>}/>
+      <Route path="/login" element={<LoginPage/>}/>
+      <Route path="/home" element={<HomePage/>}/>
       <Route path="/register" element={<RegisterPage/>}/>
-        <Route path="/" element={<Navigate to="/home" replace={true} />}/>
+        <Route path="/" element={<Navigate to="/login" replace={true} />}/>
       </Routes>
     </Router>
     </div>

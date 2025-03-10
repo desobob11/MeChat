@@ -2,7 +2,7 @@
 import ChatList from '../components/ChatList';
 import Navbar from '../components/Navbar';
 import ChatBox from '../components/ChatBox';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { useEffect, useState } from 'react';
 import { REGISTER_ROUTE, BACK_END_PORT } from '../const';
 import { GlobalProvider, useGlobal } from '../globalContext';
@@ -31,8 +31,13 @@ export default function RegisterPage() {
   const [descr, setDescr] = useState("")
 
 
+  const navigate = useNavigate()
+
+
   useEffect(() => {
-    alert(JSON.stringify(userProfile.Email))
+    if (Object.keys(userProfile).length > 1) {
+      navigate("/home")
+    }
   }, [userProfile])
 
     const sendInputToBack = (_createMsg) => {
@@ -52,11 +57,12 @@ export default function RegisterPage() {
         .then(response => {
           if (!response.ok) {
             alert("Error creating an account. Try different email or please try again later")
+            return "{}"
           }
           else {
             alert("User created successfully!")
+            return response.text()
           }
-          return response.text()
         })
         .then(data => {
           setUserProfile(JSON.parse(data))
