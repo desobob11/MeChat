@@ -42,7 +42,9 @@ type CreateAccountMessage struct {
 	Descr string			// bool 0 | 1
 }
 
-
+type Contacts struct {
+	ContactList []UserProfile
+}
 
 
 type UserProfile struct {
@@ -208,6 +210,28 @@ func CreateAccount(w http.ResponseWriter, req *http.Request) {
  }
 
 
+ func GetContacts(w http.ResponseWriter, req *http.Request) {
+    data := RequestToJson(req);
+
+    userid := int(data["UserId"].(float64))
+
+
+    messageToBack := &UserProfile{
+     UserId:       userid,
+    }
+
+    var response Contacts
+    resp := rpc_client.Call("MessageHandler.GetContacts", messageToBack, &response)
+
+    if resp != nil  {
+     fmt.Println(response);
+     w.WriteHeader(http.StatusBadRequest)
+    } else {
+        w.Header().Set("Content-Type", "application/json")
+        w.WriteHeader(http.StatusOK)
+        json.NewEncoder(w).Encode(response.ContactList)
+    }
+ }
 
 
 func HTTPThread() {
@@ -215,6 +239,7 @@ func HTTPThread() {
     serv.HandleFunc("/incoming", HandleIncoming)
     serv.HandleFunc("/register", CreateAccount)
     serv.HandleFunc("/login", Login)
+    serv.HandleFunc("/getcontacts", GetContacts)
     http.ListenAndServe("127.0.0.1:8090", cors.Default().Handler(serv))
 }
 

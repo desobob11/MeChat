@@ -44,6 +44,10 @@ type UserProfile struct {
 	Descr string
 }
 
+type Contacts struct {
+	ContactList []UserProfile
+}
+
 
 type LoginMessage struct {
 	Email string
@@ -156,6 +160,11 @@ func (t* MessageHandler) Login(message *LoginMessage, user_profile *UserProfile)
 		return err
 	}
 
+	if !pass_row.Next() {
+		fmt.Println("No such user")
+		return fmt.Errorf("no such user")
+	}
+
 	for pass_row.Next() {
 		var db_pass string
 		err = pass_row.Scan(&db_pass);
@@ -190,7 +199,6 @@ func (t* MessageHandler) Login(message *LoginMessage, user_profile *UserProfile)
 	}
 
 	for user_row.Next() {
-		var user_profile UserProfile
 
 		err = user_row.Scan(&user_profile.UserId, &user_profile.Email, &user_profile.Firstname, &user_profile.Lastname, &user_profile.Descr);
 		if err != nil {
@@ -201,9 +209,60 @@ func (t* MessageHandler) Login(message *LoginMessage, user_profile *UserProfile)
 	user_row.Close()
 
 	fmt.Println("User profile fetched")
+	fmt.Println(user_profile.Email)
+	fmt.Println(user_profile.Descr)
+	fmt.Println(user_profile.Firstname)
+	return nil
+}
+
+
+func (t* MessageHandler) GetContacts(message *UserProfile, contacts *Contacts) error {
+	t.mutex.Lock()
+	defer t.mutex.Unlock()
+
+
+		query := ` SELECT
+						U.userid,
+						U.email,
+						U.firstname,
+						U.lastname,
+						U.descr
+
+						FROM contacts C
+
+						INNER JOIN users U
+						ON U.userid = C.contactid
+
+						WHERE C.userid = ?`
+
+
+	rows, err := _db.Query(query, message.UserId)
+	if err != nil {
+		fmt.Println(err)
+		return err
+	}
+
+	for rows.Next() {
+		var contact UserProfile
+		err = rows.Scan(&contact.UserId, &contact.Email, &contact.Firstname, &contact.Lastname, &contact.Descr);
+
+		if err != nil {
+			fmt.Println(err)
+			return err
+		}
+
+		contacts.ContactList = append(contacts.ContactList, contact)
+	}
+	rows.Close()
+
+
+	fmt.Println("Contacts fetched")
 
 	return nil
 }
+
+
+
 
 
 

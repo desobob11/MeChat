@@ -177,10 +177,10 @@ export default function ChatBox() {
             body: JSON.stringify(req_body),
         };
         fetch(`http://127.0.0.1:${BACK_END_PORT}/${INCOMING_ROUTE}`, options)
-       // .then(response => alert(response.text()))     Not caring about responses for right now
-       // .then(data => alert("Response: ", data))
-       // .catch(error => alert("Error: ", error));
     }
+
+
+    
 
     const handleSubmit = (e) => {
         e.preventDefault();

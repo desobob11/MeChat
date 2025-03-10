@@ -38,7 +38,7 @@ export default function HomePage() {
 
 
     return (
-        Object.keys(userProfile).length === 0 ? loggedout() : loggedin()
+        Object.keys(userProfile).length === 0 ? loggedin() : loggedin()
     );
 
 
