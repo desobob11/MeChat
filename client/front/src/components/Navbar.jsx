@@ -1,5 +1,8 @@
 import { Disclosure, DisclosureButton, DisclosurePanel, Menu, MenuButton, MenuItem, MenuItems } from '@headlessui/react'
 import { Bars3Icon, BellIcon, XMarkIcon, UserCircleIcon } from '@heroicons/react/24/outline'
+import { GlobalProvider, useGlobal } from '../globalContext'
+import { useNavigate } from 'react-router-dom'
+import { useEffect } from 'react'
 
 const user = {
 
@@ -10,19 +13,31 @@ const navigation = [
   { name: 'Home', href: '#', current: true },
 
 ]
-const userNavigation = [
 
-
-  { name: 'Your Profile', href: '#' },
-  { name: 'Settings', href: '#' },
-  { name: 'Sign out', href: '#' },
-]
 
 function classNames(...classes) {
   return classes.filter(Boolean).join(' ')
 }
 
 export default function Navbar() {
+  const {userProfile, setUserProfile} = useGlobal();
+  const navigate = useNavigate();
+
+
+  const userNavigation = [
+
+    { name: 'Your Profile', href: '#' },
+    { name: 'Settings', href: '#' },
+    { name: 'Sign out', onClick: () => {
+      setUserProfile({})
+      navigate("/login")
+    }},
+  ]
+
+  
+
+
+
   return (
     <>
       {/*
@@ -87,6 +102,7 @@ export default function Navbar() {
                         <MenuItem key={item.name}>
                           <a
                             href={item.href}
+                            onClick={item.onClick}
                             className="block px-4 py-2 text-sm text-gray-700 data-focus:bg-gray-100 data-focus:outline-hidden"
                           >
                             {item.name}

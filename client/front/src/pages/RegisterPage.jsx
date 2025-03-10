@@ -2,9 +2,10 @@
 import ChatList from '../components/ChatList';
 import Navbar from '../components/Navbar';
 import ChatBox from '../components/ChatBox';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { useEffect, useState } from 'react';
 import { REGISTER_ROUTE, BACK_END_PORT } from '../const';
+import { GlobalProvider, useGlobal } from '../globalContext';
 
 
 class CreateAccountMessage {
@@ -21,6 +22,7 @@ class CreateAccountMessage {
 
 
 export default function RegisterPage() {
+  const {userProfile, setUserProfile} = useGlobal()
 
   const [password, setPassword] = useState("")
   const [email, setEmail] = useState("")
@@ -29,9 +31,14 @@ export default function RegisterPage() {
   const [descr, setDescr] = useState("")
 
 
-  useEffect(() => {
+  const navigate = useNavigate()
 
-  }, [])
+
+  useEffect(() => {
+    if (Object.keys(userProfile).length > 1) {
+      navigate("/home")
+    }
+  }, [userProfile])
 
     const sendInputToBack = (_createMsg) => {
         var req_body = {
@@ -49,13 +56,18 @@ export default function RegisterPage() {
         fetch(`http://127.0.0.1:${BACK_END_PORT}/${REGISTER_ROUTE}`, options)
         .then(response => {
           if (!response.ok) {
-            alert("Error creating an account. Please try again later")
-            alert(JSON.stringify(response))
+            alert("Error creating an account. Try different email or please try again later")
+            return "{}"
           }
           else {
             alert("User created successfully!")
+            return response.text()
           }
         })
+        .then(data => {
+          setUserProfile(JSON.parse(data))
+        })
+        
     }
 
     const handleSubmit = (e) => {

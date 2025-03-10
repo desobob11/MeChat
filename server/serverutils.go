@@ -3,13 +3,14 @@ package main
 import (
 	// "bufio"
 	"fmt"
+	"strconv"
 	"sync"
+
 	// "log"
 	// "net"
 	// "strings"
 	//  "net/rpc"
 	"database/sql"
-
 
 	_ "modernc.org/sqlite"
 )
@@ -33,6 +34,24 @@ type CreateAccountMessage struct {
     Firstname string         // email = key?
     Lastname string           // email = key?
 	Descr string			// bool 0 | 1
+}
+
+type UserProfile struct {
+	UserId int
+	Email string
+	Firstname string
+	Lastname string
+	Descr string
+}
+
+
+type LoginMessage struct {
+	Email string
+	Password string
+}
+
+type RPCResponse struct {
+	Message string
 }
 
 type MessageHandler struct {
@@ -64,7 +83,7 @@ func (t* MessageHandler) SaveMessage(message *ChatMessage, response *string) err
 	if err != nil {
 		fmt.Println("Error saving message. ")		// should print out rows changed here eventually
 		fmt.Println(err)
-		*response = err.Error()
+		*response = "error"
 		return err
 	}
 
@@ -75,7 +94,7 @@ func (t* MessageHandler) SaveMessage(message *ChatMessage, response *string) err
 }
 
 
-func (t* MessageHandler) CreateAccount(message *CreateAccountMessage, response *string) error {
+func (t* MessageHandler) CreateAccount(message *CreateAccountMessage, response *RPCResponse) error {
 	t.mutex.Lock()
 	defer t.mutex.Unlock()
 
@@ -88,23 +107,104 @@ func (t* MessageHandler) CreateAccount(message *CreateAccountMessage, response *
 	VALUES (?, ?, ?, ?, ?);`
 
 	
-	_, err := _db.Exec(script, message.Password,
+	result, err := _db.Exec(script, message.Password,
 		 message.Email,
 		  message.Firstname,
 		   message.Lastname,
 		    message.Descr)
+
 	if err != nil {
 		fmt.Println("Error creating user. ")		// should print out rows changed here eventually
 		fmt.Println(err)
-		*response = err.Error()
+		response.Message = "error"
 		return err
 	}
 
-	fmt.Print("Created user")
+	uid, err := result.LastInsertId()
 
-	*response = "ACK"
+	if err != nil {
+		fmt.Println("Error getting user id")
+		fmt.Println(err)
+		response.Message = "error"
+		return err
+	}
+
+	
+	uid_str := strconv.Itoa(int(uid))
+
+	fmt.Println("Created user")
+
+	response.Message = uid_str
 	return nil
 }
+
+
+func (t* MessageHandler) Login(message *LoginMessage, user_profile *UserProfile) error {
+	t.mutex.Lock()
+	defer t.mutex.Unlock()
+
+
+
+	pass_check := `SELECT  
+	[password]
+	FROM users
+	WHERE email = ?`
+
+	pass_row, err := _db.Query(pass_check, message.Email)
+	if err != nil {
+		fmt.Println("Error checking password")
+		return err
+	}
+
+	for pass_row.Next() {
+		var db_pass string
+		err = pass_row.Scan(&db_pass);
+		fmt.Println(db_pass)
+		fmt.Println(message.Password)
+		if err != nil {
+			fmt.Println("Error scanning password")
+			return err
+		}
+
+		if db_pass != message.Password {
+			fmt.Println("Incorrect password")
+			return fmt.Errorf("incorrect password")
+		}
+	}
+	pass_row.Close()
+	
+
+	query := `SELECT  
+		[userid],
+		[email], 
+		[firstname], 
+		[lastname], 
+		[descr]
+		FROM users
+		WHERE email = ?`
+
+	user_row, err := _db.Query(query, message.Email)
+	if err != nil {
+		fmt.Println(err)
+		return err
+	}
+
+	for user_row.Next() {
+		var user_profile UserProfile
+
+		err = user_row.Scan(&user_profile.UserId, &user_profile.Email, &user_profile.Firstname, &user_profile.Lastname, &user_profile.Descr);
+		if err != nil {
+			fmt.Println(err)
+			return err
+		}
+	}
+	user_row.Close()
+
+	fmt.Println("User profile fetched")
+
+	return nil
+}
+
 
 
 
@@ -121,7 +221,7 @@ func BuildDatabase() (*sql.DB, error) {
 	users_script := `CREATE TABLE users (
 						userid INTEGER PRIMARY KEY,
 						password TEXT, 
-						email TEXT, 
+						email TEXT UNIQUE, 
 						firstname TEXT, 
 						lastname TEXT, 
 						descr TEXT);`

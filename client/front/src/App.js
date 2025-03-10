@@ -11,10 +11,14 @@ import {
 import {Helmet} from "react-helmet"
 import LoginPage from './pages/LoginPage.jsx';
 import RegisterPage from './pages/RegisterPage.jsx';
+import { GlobalProvider } from './globalContext.js';
 
+
+export 
 
 function App() {
   return (
+    <GlobalProvider>
     <div>
     <Helmet>
       <meta name="theme-color" content="#673AAC" />
@@ -22,12 +26,14 @@ function App() {
     <Router>
 
       <Routes>
-      <Route path="/home" element={<LoginPage/>}/>
+      <Route path="/login" element={<LoginPage/>}/>
+      <Route path="/home" element={<HomePage/>}/>
       <Route path="/register" element={<RegisterPage/>}/>
-        <Route path="/" element={<Navigate to="/home" replace={true} />}/>
+        <Route path="/" element={<Navigate to="/login" replace={true} />}/>
       </Routes>
     </Router>
     </div>
+    </GlobalProvider>
   );
 }
 
