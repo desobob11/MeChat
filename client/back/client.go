@@ -28,6 +28,13 @@ type ChatMessage struct {
 	Acked int			// bool 0 | 1
 }
 
+type CreateAccountMessage struct {
+    Email string
+    Password string
+    Firstname string         // email = key?
+    Lastname string           // email = key?
+	Descr string			// bool 0 | 1
+}
 type MessageHandler struct {
 	mutex sync.Mutex
     db *sql.DB
@@ -39,7 +46,6 @@ const RPC_ADDRESS = "127.0.0.1:9999"    // localhost for now
 
 func HandleIncoming(w http.ResponseWriter, req *http.Request) {
    var data map[string]interface{}      // need me a JSON
-
    body_text, read_err := io.ReadAll(req.Body)
     if read_err != nil {
         http.Error(w, "Failure reading request", http.StatusBadRequest)
@@ -51,7 +57,6 @@ func HandleIncoming(w http.ResponseWriter, req *http.Request) {
        http.Error(w, "Failure converting request to JSON", http.StatusBadRequest)
        return
    }
-
    message, _ := data["msg"].(string)
    timestamp, _ := data["timestamp"].(string)
    from, _ := data["from"].(int)
@@ -64,22 +69,68 @@ func HandleIncoming(w http.ResponseWriter, req *http.Request) {
     To:        to,
     Acked:    0,
 }
-
    var response string
-
-   rpc_client.Go("MessageHandler.SaveMessage", messageToBack, &response, nil)
-   if response != ""  {
-    log.Fatal("Error response from SaveMessage RPC ", response)
+   rpc_client.Call("MessageHandler.SaveMessage", messageToBack, &response)
+   if response != "ACK"  {
+    fmt.Println("Error response from SaveMessage RPC ", response)
+    w.WriteHeader(http.StatusBadRequest)
+   } else {
+    fmt.Println(data)
+    w.WriteHeader(http.StatusOK)
    }
 
-   fmt.Println(data)
-    w.WriteHeader(http.StatusOK)
 }
+
+
+func RequestToJson(req *http.Request) map[string]interface{} {
+    var data map[string]interface{}      // need me a JSON
+    body_text, read_err := io.ReadAll(req.Body)
+     if read_err != nil {
+         return nil
+     }
+ 
+    err := json.Unmarshal(body_text, &data)
+    if err != nil {
+        return nil
+    }
+    
+    return data;
+}
+
+func CreateAccount(w http.ResponseWriter, req *http.Request) {
+    data := RequestToJson(req);
+
+    email, _ := data["Email"].(string)
+    pass, _ := data["Password"].(string)
+    first, _ := data["Firstname"].(string) 
+    last, _ := data["Lastname"].(string)
+    descr, _ := data["Descr"].(string)
+
+
+    messageToBack := &CreateAccountMessage{
+     Email:       email,
+     Password: pass,
+     Firstname:      first,
+     Lastname:        last,
+     Descr:    descr,
+ }
+
+
+    var response string
+    rpc_client.Call("MessageHandler.CreateAccount", messageToBack, &response)
+    if response != "ACK"  {
+     fmt.Println("Error response from SaveMessage RPC ", response);
+     w.WriteHeader(http.StatusBadRequest)
+    } else {
+        w.WriteHeader(http.StatusOK)
+    }
+ }
 
 
 func HTTPThread() {
     serv := http.NewServeMux()
     serv.HandleFunc("/incoming", HandleIncoming)
+    serv.HandleFunc("/register", CreateAccount)
     http.ListenAndServe("127.0.0.1:8090", cors.Default().Handler(serv))
 }
 

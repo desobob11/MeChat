@@ -9,6 +9,9 @@ import {
   Navigate
 } from "react-router-dom";
 import {Helmet} from "react-helmet"
+import LoginPage from './pages/LoginPage.jsx';
+import RegisterPage from './pages/RegisterPage.jsx';
+
 
 function App() {
   return (
@@ -19,7 +22,8 @@ function App() {
     <Router>
 
       <Routes>
-      <Route path="/home" element={<HomePage/>}/>
+      <Route path="/home" element={<LoginPage/>}/>
+      <Route path="/register" element={<RegisterPage/>}/>
         <Route path="/" element={<Navigate to="/home" replace={true} />}/>
       </Routes>
     </Router>

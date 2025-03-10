@@ -27,6 +27,14 @@ import (
 	Acked int			// bool 0 | 1
 }
 
+type CreateAccountMessage struct {
+    Email string
+    Password string
+    Firstname string         // email = key?
+    Lastname string           // email = key?
+	Descr string			// bool 0 | 1
+}
+
 type MessageHandler struct {
 	mutex sync.Mutex
 }
@@ -62,7 +70,39 @@ func (t* MessageHandler) SaveMessage(message *ChatMessage, response *string) err
 
 	fmt.Print("Wrote message")
 
-	*response = ""
+	*response = "ACK"
+	return nil
+}
+
+
+func (t* MessageHandler) CreateAccount(message *CreateAccountMessage, response *string) error {
+	t.mutex.Lock()
+	defer t.mutex.Unlock()
+
+	script := `INSERT INTO users (
+		[password], 
+		[email], 
+		[firstname], 
+		[lastname], 
+		[descr])
+	VALUES (?, ?, ?, ?, ?);`
+
+	
+	_, err := _db.Exec(script, message.Password,
+		 message.Email,
+		  message.Firstname,
+		   message.Lastname,
+		    message.Descr)
+	if err != nil {
+		fmt.Println("Error creating user. ")		// should print out rows changed here eventually
+		fmt.Println(err)
+		*response = err.Error()
+		return err
+	}
+
+	fmt.Print("Created user")
+
+	*response = "ACK"
 	return nil
 }
 
@@ -79,22 +119,23 @@ func (t* MessageHandler) SaveMessage(message *ChatMessage, response *string) err
 
 func BuildDatabase() (*sql.DB, error) {
 	users_script := `CREATE TABLE users (
-						userid INT, 
+						userid INTEGER PRIMARY KEY,
+						password TEXT, 
 						email TEXT, 
 						firstname TEXT, 
 						lastname TEXT, 
 						descr TEXT);`
 
 	contacts_script :=`CREATE TABLE contacts (
-						userid INT, 
-						contactid INT);`
+						userid INTEGER PRIMARY KEY, 
+						contactid INTEGER);`
 
 	messages_script :=`CREATE TABLE messages (
-						from_userid INT, 
-						to_userid INT,
+						from_userid INTEGER PRIMARY KEY, 
+						to_userid INTEGER,
 						message TEXT,
 						timestamp TEXT,
-						acked INT);`			// bool
+						acked INTEGER);`			// bool
 
 
 
