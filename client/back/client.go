@@ -14,6 +14,7 @@ import (
 	"database/sql"
 	"net/rpc"
 	"sync"
+    "crypto/sha256"
 
 	"github.com/rs/cors"
 )
@@ -100,16 +101,22 @@ func RequestToJson(req *http.Request) map[string]interface{} {
 func CreateAccount(w http.ResponseWriter, req *http.Request) {
     data := RequestToJson(req);
 
+
+
     email, _ := data["Email"].(string)
     pass, _ := data["Password"].(string)
     first, _ := data["Firstname"].(string) 
     last, _ := data["Lastname"].(string)
     descr, _ := data["Descr"].(string)
 
+    h := sha256.New()
+    h.Write([]byte(pass))
+
+    hash_pass := string(h.Sum(nil))
 
     messageToBack := &CreateAccountMessage{
      Email:       email,
-     Password: pass,
+     Password: hash_pass,
      Firstname:      first,
      Lastname:        last,
      Descr:    descr,
