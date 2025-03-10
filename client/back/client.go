@@ -42,12 +42,20 @@ type CreateAccountMessage struct {
 	Descr string			// bool 0 | 1
 }
 
+
+
+
 type UserProfile struct {
     UserId int
     Email string
     Firstname string
     Lastname string
     Descr string
+}
+
+type LoginMessage struct {
+	Email string
+	Password string
 }
 
 type MessageHandler struct {
@@ -160,10 +168,53 @@ func CreateAccount(w http.ResponseWriter, req *http.Request) {
  }
 
 
+
+
+ func Login(w http.ResponseWriter, req *http.Request) {
+    data := RequestToJson(req);
+
+    email, _ := data["Email"].(string)
+    pass, _ := data["Password"].(string)
+
+    h := sha256.New()
+    h.Write([]byte(pass))
+
+    hash_pass := hex.EncodeToString(h.Sum(nil))
+    messageToBack := &LoginMessage{
+     Email:       email,
+     Password: hash_pass,
+ }
+
+
+    var response UserProfile
+    resp := rpc_client.Call("MessageHandler.Login", messageToBack, &response)
+
+
+    if resp != nil  {
+     fmt.Println("Error response from create user RPC ", response);
+     w.WriteHeader(http.StatusBadRequest)
+    } else {
+        w.Header().Set("Content-Type", "application/json")
+        w.WriteHeader(http.StatusOK)
+        profileResponse := UserProfile {
+            UserId: response.UserId,
+            Email: response.Email,
+            Firstname:  response.Firstname,
+            Lastname:  response.Lastname,
+            Descr: response.Descr,
+        }
+        json.NewEncoder(w).Encode(profileResponse)
+    }
+ }
+
+
+
+
 func HTTPThread() {
     serv := http.NewServeMux()
     serv.HandleFunc("/incoming", HandleIncoming)
     serv.HandleFunc("/register", CreateAccount)
+    serv.HandleFunc("/login", Login)
     http.ListenAndServe("127.0.0.1:8090", cors.Default().Handler(serv))
 }
 
