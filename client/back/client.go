@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
-
+    "strconv"
     "encoding/hex"
 	//  "log"
 	"io"
@@ -41,6 +41,15 @@ type CreateAccountMessage struct {
     Lastname string           // email = key?
 	Descr string			// bool 0 | 1
 }
+
+type UserProfile struct {
+    UserId int
+    Email string
+    Firstname string
+    Lastname string
+    Descr string
+}
+
 type MessageHandler struct {
 	mutex sync.Mutex
     db *sql.DB
@@ -131,13 +140,22 @@ func CreateAccount(w http.ResponseWriter, req *http.Request) {
     var response RPCResponse
     resp := rpc_client.Call("MessageHandler.CreateAccount", messageToBack, &response)
 
-    
+
     if resp != nil  {
      fmt.Println("Error response from create user RPC ", response);
      w.WriteHeader(http.StatusBadRequest)
     } else {
+        w.Header().Set("Content-Type", "application/json")
         w.WriteHeader(http.StatusOK)
-        w.Write([]byte(response.Message))           // give userid back to front end
+        user_id, _ := strconv.Atoi(response.Message)
+        profileResponse := UserProfile {
+            UserId: user_id,
+            Email: email,
+            Firstname:  first,
+            Lastname:  last,
+            Descr: descr,
+        }
+        json.NewEncoder(w).Encode(profileResponse)
     }
  }
 

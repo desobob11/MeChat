@@ -3,10 +3,10 @@ import { createContext, useContext, useState } from 'react';
 const GlobalContext = createContext();
 
 export const GlobalProvider = ({ children }) => {
-  const [userId, setUserId] = useState(-1);
+  const [userProfile, setUserProfile] = useState({});
 
   return (
-    <GlobalContext.Provider value={{ userId, setUserId }}>
+    <GlobalContext.Provider value={{ userProfile, setUserProfile }}>
       {children}
     </GlobalContext.Provider>
   );

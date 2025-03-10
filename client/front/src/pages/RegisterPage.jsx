@@ -22,7 +22,7 @@ class CreateAccountMessage {
 
 
 export default function RegisterPage() {
-  const {userId, setUserId} = useGlobal()
+  const {userProfile, setUserProfile} = useGlobal()
 
   const [password, setPassword] = useState("")
   const [email, setEmail] = useState("")
@@ -32,8 +32,8 @@ export default function RegisterPage() {
 
 
   useEffect(() => {
-    alert(userId)
-  }, [userId])
+    alert(JSON.stringify(userProfile.Email))
+  }, [userProfile])
 
     const sendInputToBack = (_createMsg) => {
         var req_body = {
@@ -59,7 +59,7 @@ export default function RegisterPage() {
           return response.text()
         })
         .then(data => {
-          setUserId(parseInt(data))
+          setUserProfile(JSON.parse(data))
         })
         
     }
