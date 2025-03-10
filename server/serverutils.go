@@ -227,11 +227,11 @@ func BuildDatabase() (*sql.DB, error) {
 						descr TEXT);`
 
 	contacts_script :=`CREATE TABLE contacts (
-						userid INTEGER PRIMARY KEY, 
+						userid INTEGER, 
 						contactid INTEGER);`
 
 	messages_script :=`CREATE TABLE messages (
-						from_userid INTEGER PRIMARY KEY, 
+						from_userid INTEGER, 
 						to_userid INTEGER,
 						message TEXT,
 						timestamp TEXT,
