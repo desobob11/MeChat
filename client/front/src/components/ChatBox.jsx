@@ -49,22 +49,37 @@ export default function ChatBox() {
     const {renderedMessages, setRenderedMessages} = useGlobal([])
     const {selectedContactId, setSelectedContactId} = useGlobal();
     const [currentInput, setCurrentInput] = useState("");
+    
 
     const {userProfile, setUserProfile} = useGlobal()
 
     
     useEffect(() => {
+        if (selectedContactId !== -1) {
+            GetMessages();
+    
+            const interval = setInterval(() => {
+                GetMessages();
+            }, 1000); 
+    
+            return () => clearInterval(interval);
+        }
+    
         if (latestMessage.current) {
             latestMessage.current.scrollIntoView({ behavior: "smooth" });
         }
-        
-        if (selectedContactId != -1) {
-            GetMessages()
+    
+    }, [selectedContactId]);
+
+
+    useEffect(() => {
+        if (latestMessage.current) {
+            latestMessage.current.scrollIntoView({ behavior: "smooth" });
         }
-
-    }, [selectedContactId])
-
+    }, [renderedMessages]);
     const latestMessage = useRef(null);
+
+
 
 
     const GetMessages = () => {
