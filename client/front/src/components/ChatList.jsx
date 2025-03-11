@@ -60,9 +60,6 @@ export default function ChatList() {
         }
 
 
-    const SetContact = () => {
-
-    }
 
     useEffect(() => {
         if (contacts.length === 0) {

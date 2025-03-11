@@ -44,8 +44,17 @@ type UserProfile struct {
 	Descr string
 }
 
+type GetMessagesRequest struct {
+	UserId int
+	ContactId int
+}
+
 type Contacts struct {
 	ContactList []UserProfile
+}
+
+type MessageList struct {
+	Messages []ChatMessage
 }
 
 
@@ -262,10 +271,52 @@ func (t* MessageHandler) GetContacts(message *UserProfile, contacts *Contacts) e
 }
 
 
+func (t* MessageHandler) GetMessages(message *GetMessagesRequest, messages *MessageList) error {
+	t.mutex.Lock()
+	defer t.mutex.Unlock()
 
 
+	query := 
+			`SELECT
+			M.from_userid,
+			M.to_userid,
+			M.message,
+			M.timestamp,
+			M.acked
+
+			FROM messages M
 
 
+			WHERE (M.from_userid = ?
+			AND M.to_userid =  ?)
+			OR
+			(M.from_userid = ?
+   			 AND M.to_userid =  ?)`
+
+	rows, err := _db.Query(query, message.UserId, message.ContactId, message.ContactId, message.UserId)
+	if err != nil {
+		fmt.Println(err)
+		return err
+	}
+
+	for rows.Next() {
+		var msg ChatMessage
+		err = rows.Scan(&msg.From, &msg.To, &msg.Message, &msg.Timestamp, &msg.Acked);
+
+		if err != nil {
+			fmt.Println(err)
+			return err
+		}
+
+		messages.Messages = append(messages.Messages, msg)
+	}
+	rows.Close()
+
+
+	fmt.Println("Messages fetched")
+
+	return nil
+}
 
 
 

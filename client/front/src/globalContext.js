@@ -8,7 +8,7 @@ export const GlobalProvider = ({ children }) => {
   const [renderedMessages, setRenderedMessages] = useState([]);
 
   return (
-    <GlobalContext.Provider value={{ userProfile, setUserProfile, selectedContactId, setSelectedContactId }}>
+    <GlobalContext.Provider value={{ userProfile, setUserProfile, selectedContactId, setSelectedContactId, renderedMessages, setRenderedMessages }}>
       {children}
     </GlobalContext.Provider>
   );
