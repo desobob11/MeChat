@@ -92,17 +92,18 @@ func HandleIncoming(w http.ResponseWriter, req *http.Request) {
        http.Error(w, "Failure converting request to JSON", http.StatusBadRequest)
        return
    }
-   message, _ := data["msg"].(string)
-   timestamp, _ := data["timestamp"].(string)
-   from, _ := data["from"].(int)
-   to, _ := data["to"].(int)
+   message, _ := data["Message"].(string)
+   timestamp, _ := data["Timestamp"].(string)
+   from := int(data["From"].(float64))
+   to := int(data["To"].(float64))
+   acked := 1
 
    messageToBack := &ChatMessage{
     Message:       message,
     Timestamp: timestamp,
     From:      from,
     To:        to,
-    Acked:    0,
+    Acked:    acked,
 }
     var response string
    resp := rpc_client.Call("MessageHandler.SaveMessage", messageToBack, &response)

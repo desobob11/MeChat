@@ -337,10 +337,12 @@ func BuildDatabase() (*sql.DB, error) {
 						descr TEXT);`
 
 	contacts_script :=`CREATE TABLE contacts (
+						rec_id INTEGER PRIMARY KEY,
 						userid INTEGER, 
 						contactid INTEGER);`
 
 	messages_script :=`CREATE TABLE messages (
+						rec_id INTEGER PRIMARY KEY,
 						from_userid INTEGER, 
 						to_userid INTEGER,
 						message TEXT,

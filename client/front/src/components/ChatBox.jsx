@@ -107,11 +107,11 @@ export default function ChatBox() {
 
     const sendInputToBack = (_msg) => {
         var req_body = {
-            from: _msg.from,
-            to: _msg.to,
-            msg: _msg.msg,
-            timestamp: _msg.timestamp,
-            acked: 0
+            From: _msg.From,
+            To: _msg.To,
+            Message: _msg.Message,
+            Timestamp: _msg.Timestamp,
+            Acked: 1
         }
         const options = {
             method: "POST",
@@ -127,13 +127,12 @@ export default function ChatBox() {
     const handleSubmit = (e) => {
         e.preventDefault();
         var now = new Date();
-        var to_send = new Message(
-            0,
-            1,
-            currentInput, 
-            `${now.getHours()}:${new String(now.getMinutes()).padStart(2, "0")}`, 
-            false
-        );
+        var to_send = {From: userProfile.UserId,
+            To: selectedContactId,
+            Message: currentInput, 
+            Timestamp: `${now.getHours()}:${new String(now.getMinutes()).padStart(2, "0")}`, 
+            Acked: 1
+        }
         sendInputToBack(to_send);
         setCurrentInput("");
         setRenderedMessages(prev => [...prev, to_send]);
@@ -151,7 +150,7 @@ export default function ChatBox() {
                 {renderedMessages.map((_msg, index) => (
                     <li key={index}>
                         <ChatBubble  ref={index === renderedMessages.length - 1 ? latestMessage : null}
-                         msg={_msg.Message} timestamp={_msg.timestamp} recv={_msg.From !== userProfile.UserId} />
+                         msg={_msg.Message} timestamp={_msg.Timestamp} recv={_msg.From !== userProfile.UserId} />
                     </li>
                 ))}
             </ul>
