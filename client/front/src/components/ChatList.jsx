@@ -64,7 +64,7 @@ export default function ChatList() {
 
     useEffect(() => {
 
-        if (contacts.length === 0) {
+        if (contacts === null) {
             GetContacts();
         }
 
@@ -77,22 +77,28 @@ export default function ChatList() {
             <text className="paddingtext-gray-800 text-4xl font-sans font-bold ">
                 Chats
             </text>
-            <ul role="list" className="divide-y divide-gray-100 border-solid shadow-md rounded-xl h-96 overflow-auto">
-            {contacts.length != 0 ? contacts.map((person) => (
-                <button className="block w-full text-left hover:bg-gray-100 bg-transparent border-0 p-0 m-0 outline-none focus:outline-none"
-                onClick={() => setSelectedContactId(person.UserId)}>
-               <ChatContact
-               userid={person.UserId}
-               name={`${person.Firstname} ${person.Lastname}`}
-               email={person.Email}
-               role={person.Descr}
-               lastSeen={""}
-               lastSeenDateTime={""}
-                        
-               />
-               </button>
-            )) : <p>No contacts found</p>}
-            </ul>      
+            {contacts === null ? (
+                <p>Loading...</p>
+            ) : contacts.length === 0 ? (
+                <p>No contacts found</p>
+            ) : (
+                <ul role="list" className="divide-y divide-gray-100 border-solid shadow-md rounded-xl h-96 overflow-auto">
+                    {contacts.map((person) => (
+                        <button className="block w-full text-left hover:bg-gray-100 bg-transparent border-0 p-0 m-0 outline-none focus:outline-none"
+                        onClick={() => setSelectedContactId(person.UserId)}>
+                    <ChatContact
+                    userid={person.UserId}
+                    name={`${person.Firstname} ${person.Lastname}`}
+                    email={person.Email}
+                    role={person.Descr}
+                    lastSeen={""}
+                    lastSeenDateTime={""}
+                                
+                    />
+                    </button>
+                    ))}
+                </ul>      
+            )}
         </div>
     );
 }
