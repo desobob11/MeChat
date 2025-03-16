@@ -31,7 +31,7 @@ export default function ChatList() {
 
     const {selectedContactId, setSelectedContactId} = useGlobal()
     
-    const [contacts, setContacts] = useState([])
+    const [contacts, setContacts] = useState(null)
 
 
     const GetContacts = () => {
@@ -67,6 +67,7 @@ export default function ChatList() {
         if (contacts === null) {
             GetContacts();
         }
+        console.log(contacts)
 
     }, [contacts])
 
