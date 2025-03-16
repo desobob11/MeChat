@@ -14,11 +14,8 @@ export default function HomePage() {
         
         <div>
         <Navbar />
+        
         <div class="pl-[5%] grid grid-cols-2 gap-1 m-32">
-
-
-
-
             <ChatList />
             <ChatBox/>
         </div>
