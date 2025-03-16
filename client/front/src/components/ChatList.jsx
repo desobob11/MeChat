@@ -54,7 +54,8 @@ export default function ChatList() {
             }
             })
             .then(data => {
-            setContacts(JSON.parse(data))
+                const parsedData = JSON.parse(data)
+                setContacts(parsedData ? parsedData : [])
             })
             
         }
@@ -62,8 +63,9 @@ export default function ChatList() {
 
 
     useEffect(() => {
+
         if (contacts.length === 0) {
-           GetContacts();
+            GetContacts();
         }
 
     }, [contacts])
@@ -76,22 +78,21 @@ export default function ChatList() {
                 Chats
             </text>
             <ul role="list" className="divide-y divide-gray-100 border-solid shadow-md rounded-xl h-96 overflow-auto">
-                {contacts.map((person) => (
-                    <button className="block w-full text-left hover:bg-gray-100 bg-transparent border-0 p-0 m-0 outline-none focus:outline-none"
-                    onClick={() => setSelectedContactId(person.UserId)}>
-                   <ChatContact
-                   userid={person.UserId}
-                   name={`${person.Firstname} ${person.Lastname}`}
-                   email={person.Email}
-                   role={person.Descr}
-                   lastSeen={""}
-                   lastSeenDateTime={""}
-                            
-                   />
-                   </button>
-                    
-                ))}
-            </ul>
+            {contacts.length != 0 ? contacts.map((person) => (
+                <button className="block w-full text-left hover:bg-gray-100 bg-transparent border-0 p-0 m-0 outline-none focus:outline-none"
+                onClick={() => setSelectedContactId(person.UserId)}>
+               <ChatContact
+               userid={person.UserId}
+               name={`${person.Firstname} ${person.Lastname}`}
+               email={person.Email}
+               role={person.Descr}
+               lastSeen={""}
+               lastSeenDateTime={""}
+                        
+               />
+               </button>
+            )) : <p>No contacts found</p>}
+            </ul>      
         </div>
     );
 }
