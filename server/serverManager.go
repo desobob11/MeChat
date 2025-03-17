@@ -1,5 +1,4 @@
 package main
-
 func main(){
-	spawn_server()
+	spawn_server(1)
 }

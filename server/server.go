@@ -30,11 +30,12 @@ class Message {
 */
 
 
-func Initialize() *sql.DB {
+func Initialize(PID int) *sql.DB {
     // build database file if we have to
-    _, err := os.Stat(DB_NAME)
+    server_database := GenerateDatabaseName(PID)
+    _, err := os.Stat(server_database)
     if err != nil {
-        db, build_err := BuildDatabase()
+        db, build_err := BuildDatabase(server_database)
         if build_err != nil {
             log.Fatal("Error creating database file")
             return nil// failed somewhere
@@ -42,7 +43,7 @@ func Initialize() *sql.DB {
         return db
     }
 
-    db, read_err := sql.Open("sqlite", DB_NAME)
+    db, read_err := sql.Open("sqlite", server_database)
     if read_err != nil {
         log.Fatal("Error opening database file that existed")
         return nil
@@ -69,8 +70,8 @@ func HandleRPC() {
 
 var _db *sql.DB
 
-func spawn_server() {
-    _db = Initialize()
+func spawn_server(PID int) {
+    _db = Initialize(PID)
     if _db == nil {
         log.Fatal("FATAL ERROR ON INIT")
         os.Exit(-1)
