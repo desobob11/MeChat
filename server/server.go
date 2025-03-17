@@ -29,9 +29,11 @@ class Message {
 }
 */
 
+var _PID int
 
 func Initialize(PID int) *sql.DB {
     // build database file if we have to
+    _PID = PID
     server_database := GenerateDatabaseName(PID)
     _, err := os.Stat(server_database)
     if err != nil {
