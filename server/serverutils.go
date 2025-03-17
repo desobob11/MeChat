@@ -15,9 +15,8 @@ import (
 	_ "modernc.org/sqlite"
 )
 
-
- const DB_NAME = "mechat.sqlite"
- const RPC_ADDRESS = "127.0.0.1:9999"
+//  const DB_NAME = "mechat.sqlite"
+ const RPC_ADDRESS = "127.0.0.1:" // leave space for the port number
 
 
  type ChatMessage struct {
@@ -71,6 +70,9 @@ type MessageHandler struct {
 	mutex sync.Mutex
 }
 
+func GenerateDatabaseName(PID int) string {
+	return ("mechat" + strconv.Itoa(PID) + ".sqlite")
+}
 
 /*
 	Saves record of this message trying to be sent from user
@@ -327,7 +329,7 @@ func (t* MessageHandler) GetMessages(message *GetMessagesRequest, messages *Mess
 
 
 
-func BuildDatabase() (*sql.DB, error) {
+func BuildDatabase(database_name string) (*sql.DB, error) {
 	users_script := `CREATE TABLE users (
 						userid INTEGER PRIMARY KEY,
 						password TEXT, 
@@ -351,7 +353,7 @@ func BuildDatabase() (*sql.DB, error) {
 
 
 
-	db, err := sql.Open("sqlite", DB_NAME)
+	db, err := sql.Open("sqlite", database_name)
 	if err != nil {
 		fmt.Println("Error creating database file.")
 		return nil, err;
