@@ -13,6 +13,7 @@ import (
 	//  "net/rpc"
 	"database/sql"
 	"net"
+	"strconv"
 	"sync"
 
 	_ "modernc.org/sqlite"
@@ -54,8 +55,9 @@ func Initialize(PID int) *sql.DB {
     return db
 }
 
-func HandleRPC() {
-    listener, err := net.Listen("tcp", RPC_ADDRESS)
+func HandleRPC(rpc_address string) {
+    listener, err := net.Listen("tcp", rpc_address)
+    println("Listening on", rpc_address)
     if err != nil {
         log.Fatal("Failure listening for RPC calls", err)
     }
@@ -72,8 +74,10 @@ func HandleRPC() {
 
 var _db *sql.DB
 
-func spawn_server(PID int) {
+func spawn_server(PID int, port int) {
+    println("Spawning server", PID)
     _db = Initialize(PID)
+    _serveraddress := RPC_ADDRESS + strconv.Itoa(port)
     if _db == nil {
         log.Fatal("FATAL ERROR ON INIT")
         os.Exit(-1)
@@ -86,7 +90,8 @@ func spawn_server(PID int) {
 
     var wg sync.WaitGroup
     wg.Add(1) 
-    go HandleRPC()
+    println("Starting RPC server, listening on port ", _serveraddress)
+    go HandleRPC(_serveraddress)
 
     wg.Wait()
 }

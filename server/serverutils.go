@@ -16,7 +16,7 @@ import (
 )
 
 //  const DB_NAME = "mechat.sqlite"
- const RPC_ADDRESS = "127.0.0.1:9999"
+ const RPC_ADDRESS = "127.0.0.1:" // leave space for the port number
 
 
  type ChatMessage struct {
