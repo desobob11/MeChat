@@ -3,7 +3,6 @@ package main
 import (
 	// "bufio"
 	_ "fmt"
-	_ "fmt"
 	"log"
 	"net/rpc"
 	"os"
@@ -70,7 +69,7 @@ func HandleRPC() {
 
 var _db *sql.DB
 
-func main() {
+func spawn_server() {
     _db = Initialize()
     if _db == nil {
         log.Fatal("FATAL ERROR ON INIT")
@@ -87,10 +86,6 @@ func main() {
     go HandleRPC()
 
     wg.Wait()
-    
-
-
-
 }
 
 
