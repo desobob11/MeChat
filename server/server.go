@@ -35,6 +35,8 @@ type Server struct {
 	LogMutex    sync.Mutex
 	BackupNodes []ReplicaAddress
 	AddressPort ReplicaAddress
+	LeaderID int
+	Running bool
 }
 
 // Type definitions for replication
@@ -105,15 +107,17 @@ func ReadReplicaAddresses(filename string) []ReplicaAddress {
 func Initialize(PID int) *Server {
 	// Init Server
 
-	newArray := append([]ReplicaAddress{}, REPLICA_ADDRESSES...)
-	otherReplicas := append(newArray[:ADDRESS_OFFSET], newArray[ADDRESS_OFFSET + 1:]...)
+	//newArray := append([]ReplicaAddress{}, REPLICA_ADDRESSES...)
+	//otherReplicas := append(newArray[:ADDRESS_OFFSET], newArray[ADDRESS_OFFSET + 1:]...)
 	
 
 	server := &Server{
 		PID:         PID,
 		IsLeader:    (ADDRESS_OFFSET == 0), // Node with PID 0 is the leader
-		BackupNodes: otherReplicas,
+		BackupNodes: REPLICA_ADDRESSES,
 		AddressPort: REPLICA_ADDRESSES[ADDRESS_OFFSET],
+		LeaderID: 0,					// leader is always first IP when the service is kicked off
+		Running: false,
 	}
 
 	// Init Log
@@ -192,6 +196,12 @@ func (s *Server) AppendToLog(entry LogEntry) (LogEntry, error) {
 	return entry, nil
 }
 
+func IsAddressSelf(addr1, addr2 ReplicaAddress) bool {
+	return fmt.Sprintf("%s:%d", addr1.Address, addr1.Port) == fmt.Sprintf("%s:%d", addr2.Address, addr2.Port)
+}
+
+
+
 // Method to replicate to backup nodes
 func (s *Server) ReplicateToBackups(entry LogEntry) {
 	if !s.IsLeader || len(s.BackupNodes) == 0 {
@@ -208,6 +218,11 @@ func (s *Server) ReplicateToBackups(entry LogEntry) {
 
 	req := ReplicationRequest{Entries: reqs}
 	for _, addr := range s.BackupNodes {
+
+		if IsAddressSelf(s.AddressPort, addr) {			// don't replicate to myself
+			continue
+		}
+
 		addr_string := fmt.Sprintf("%s:%d", addr.Address, addr.Port)
 		caller, err := net.DialTimeout("tcp", addr_string, 3*time.Second)		// need a timeout here, else this hangs if backup not reachable
 
@@ -402,6 +417,98 @@ func (r *ReplicationHandler) ApplyEntries(req *ReplicationRequest, resp *Replica
 	resp.Success = true
 	resp.LastIndex = s.LogIndex
 	return nil
+}
+
+
+func (r *ReplicationHandler) IsStatusOK(req *ReplicationRequest, resp *ReplicationResponse) error {
+	resp.Success = true;
+	resp.LastIndex = -1;
+	resp.Message = "STATUSOK"
+	return nil
+}
+
+/*
+	Bully messages below
+*/
+
+func (r *ReplicationHandler) BullyElection(req *ReplicationRequest, resp *ReplicationResponse) error {
+	resp.Success = true;
+	resp.LastIndex = int(ADDRESS_OFFSET);
+	resp.Message = "ELECTION"
+	return nil
+}
+
+func (r *ReplicationHandler) BullyLeader(req *ReplicationRequest, resp *ReplicationResponse) error {
+	resp.Success = true;
+	resp.LastIndex = int(ADDRESS_OFFSET);
+	resp.Message = "LEADER"
+	return nil
+}
+
+func (r *ReplicationHandler) BullyBully(req *ReplicationRequest, resp *ReplicationResponse) error {
+	resp.Success = true;
+	resp.LastIndex = int(ADDRESS_OFFSET);
+	resp.Message = "BULLY"
+	return nil
+}
+
+
+
+
+func (s* Server) BullyAlgorithmThread() {
+	for {
+
+		for s.CheckLeaderStatus() {	// check for leader every five seconds
+			time.Sleep(5 * time.Second)
+		}
+
+		// leader is dead
+
+
+
+
+	}
+}
+
+
+func (s* Server) IsHighestId() bool {
+	for i, replica := range s.BackupNodes {
+		if !IsAddressSelf(s.AddressPort, replica) && i != s.LeaderID {		// send to all but self and crashed leader
+			
+			
+
+		}
+	}
+}
+
+
+func (s *Server) InitiateElection() bool {
+	s.Running = true;
+	if
+}
+
+func (s *Server) CheckLeaderStatus() bool {
+	leader_addr := s.BackupNodes[s.LeaderID]
+	addr_string := fmt.Sprintf("%s:%d", leader_addr.Address, leader_addr.Port)
+	caller, err := net.DialTimeout("tcp", addr_string, 3*time.Second)		// need a timeout here, else this hangs if backup not reachable
+	if err != nil {
+		fmt.Println("Leader down")
+		return false
+	}
+
+	var resp ReplicationResponse
+	client := rpc.NewClient(caller)
+	err = client.Call("ReplicationHandler.IsStatusOK", nil, &resp)
+	if err != nil {
+		fmt.Println("Leader down")
+		return false
+	}
+
+	if resp.Message != "STATUSOK" {
+		fmt.Println("Leader down")
+		return false
+	}
+	return true;
 }
 
 

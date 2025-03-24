@@ -270,7 +270,9 @@ func CreateAccount(w http.ResponseWriter, req *http.Request) {
     }
  }
 
-
+func attemptRPCCall(serviceMethod string, args any, reply any) err {
+    
+}
 
  
 
