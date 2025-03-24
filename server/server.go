@@ -13,6 +13,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"sort"
 
 	_ "modernc.org/sqlite"
 )
@@ -197,10 +198,15 @@ func (s *Server) ReplicateToBackups(entry LogEntry) {
 		return
 	}
 
-	req := ReplicationRequest{
-		Entries: []LogEntry{entry},
+	reqs, err := ReadAllEntires(s)
+	if err != nil {
+		fmt.Printf("Error: %s", err)
 	}
 
+	reqs = append(reqs, entry)	// add entry to list of messages we need to send
+
+
+	req := ReplicationRequest{Entries: reqs}
 	for _, addr := range s.BackupNodes {
 		addr_string := fmt.Sprintf("%s:%d", addr.Address, addr.Port)
 		caller, err := net.DialTimeout("tcp", addr_string, 3*time.Second)		// need a timeout here, else this hangs if backup not reachable
@@ -282,6 +288,33 @@ func (t *MessageHandler) GetNodeInfo(dummy *int, info *NodeInfo) error {
 	return nil
 }
 
+func ReadAllEntires(server *Server) ([]LogEntry, error) {
+	logFiles := []LogEntry{} 
+	filenames, err := os.ReadDir(server.LogDir);
+	if err != nil {
+		fmt.Printf("Error: %s", err)
+		return logFiles, err
+	}
+
+	for _, name := range filenames {
+		text, err := os.ReadFile(fmt.Sprintf("%s/%s", server.LogDir, name.Name()))
+		if err != nil {
+			fmt.Printf("Error: %s", err)
+			return logFiles, err
+		}
+		var data LogEntry
+		err = json.Unmarshal(text, &data)
+		if err != nil {
+			fmt.Printf("Error: %s", err)
+			return logFiles, err
+		}
+		
+		logFiles = append(logFiles, data)
+
+	}
+	return logFiles, nil
+}
+
 // Handler for replication requests
 func (r *ReplicationHandler) ApplyEntries(req *ReplicationRequest, resp *ReplicationResponse) error {
 	r.mutex.Lock()
@@ -290,13 +323,17 @@ func (r *ReplicationHandler) ApplyEntries(req *ReplicationRequest, resp *Replica
 	s := r.server
 	log.Printf("Node %d: Received %d entries for replication", s.PID, len(req.Entries))
 
-
+	
 	// Reject if we're the leader		
 	if s.IsLeader {
 		resp.Success = false
 		resp.Message = "leader cannot accept replication requests"
 		return nil
 	}
+
+	sort.Slice(req.Entries, func(i, j int) bool {
+		return req.Entries[i].Index < req.Entries[j].Index
+	})
 
 	// Process each entry
 	for _, entry := range req.Entries {
@@ -308,10 +345,12 @@ func (r *ReplicationHandler) ApplyEntries(req *ReplicationRequest, resp *Replica
 		
 		// Check for gaps in the log
 		if entry.Index > s.LogIndex+1 {
-			resp.Success = false
-			resp.Message = fmt.Sprintf("log gap detected, expected %d, got %d", s.LogIndex+1, entry.Index)
-			resp.LastIndex = s.LogIndex
-			return nil
+			//resp.Success = false
+			//resp.Message = fmt.Sprintf("log gap detected, expected %d, got %d, catching up", s.LogIndex+1, entry.Index)
+			fmt.Printf("log gap detected, expected %d, got %d, catching up\n", s.LogIndex+1, entry.Index)
+			//resp.LastIndex = s.LogIndex
+			//return nil
+			s.LogIndex = entry.Index
 		}
 
 		// Ensure database connection is valid
@@ -371,7 +410,9 @@ func (r *ReplicationHandler) ApplyEntries(req *ReplicationRequest, resp *Replica
 
 func main() {
 	// Configuration
+	// Configuration
 
+	
 	offset, err := strconv.ParseUint(os.Args[1], 10, 32)
 
 	if err != nil {
@@ -387,7 +428,7 @@ func main() {
 
 	// Start the leader first (PID 0)
 	server := spawn_server(0)
-
+	
 	for _, addr := range server.BackupNodes {
 		fmt.Printf("%s:%d\n", addr.Address, addr.Port)
 	}
@@ -401,5 +442,6 @@ func main() {
 	// Wait forever
 	select {}
 	
+
 	
 }
