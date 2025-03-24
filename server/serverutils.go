@@ -73,7 +73,7 @@ type NodeInfo struct {
 }
 
 func GenerateDatabaseName(PID int) string {
-	return "mechat" + fmt.Sprintf("%d", PID) + ".sqlite"
+	return "mechat0.sqlite"
 }
 
 /*
