@@ -442,7 +442,7 @@ func (r *ReplicationHandler) BullyLeader(msg *BullyMessage, resp *ReplicationRes
 }
 
 func (r *ReplicationHandler) BullyElection(msg *BullyMessage, resp *ReplicationResponse) error {
-	if r.server.PID < msg.PID {
+	if msg.PID < r.server.PID {
 		resp.LastIndex = r.server.PID		// bullied it
 		if !r.server.Running {
 			go r.InitiateElection()		// THIS SHOULD PROBABLY NOT BE CALLED IN THE RPC...
@@ -473,12 +473,6 @@ func (r* ReplicationHandler) BullyAlgorithmThread() {
 	}
 }
 
-func (s* Server) IsHighestId() bool {
-	if s.PID == len(s.BackupNodes) - 1 {		// i am largest
-		
-	}	
-	return false
-}	
 
 /*
 func (s* Server) IsHighestId() bool {
@@ -514,6 +508,7 @@ func  (r *ReplicationHandler) InitiateElection() bool {
 	r.server.Running = true;
 	current_leader := r.server.LeaderID		// trying to use this for changes
 	fmt.Println("CALLING ELECTION")
+
 	if r.server.PID == len(r.server.BackupNodes) - 1 {
 		for _, replica := range r.server.BackupNodes {
 			if IsAddressSelf(r.server.AddressPort, replica) { 			// skip crashed leader and self
@@ -521,6 +516,7 @@ func  (r *ReplicationHandler) InitiateElection() bool {
 			}
 			var resp ReplicationResponse
 			msg := BullyMessage{PID: r.server.PID, Message: "LEADER"}
+			r.server.LeaderID = r.server.PID
 			SendBullyMessage(replica, "BullyLeader", msg, &resp)
 		}
 	} else {
@@ -534,6 +530,9 @@ func  (r *ReplicationHandler) InitiateElection() bool {
 		
 		}
 		time.Sleep(1 * time.Second)		// probably much too long
+
+
+		fmt.Printf("%d\n", electionResponse.LastIndex)
 		
 		if electionResponse.LastIndex == -1 {	// no response
 			r.server.LeaderID = r.server.PID
@@ -621,9 +620,9 @@ func main() {
 	go server.HandleRPC(fmt.Sprintf("%s:%d", server.AddressPort.Address, server.AddressPort.Port), &messageHandler, &replicationHandler)
 
 	
-	// time.Sleep(1 * time.Second)
-	//replicationHandler.InitiateElection()
-	// go replicationHandler.BullyAlgorithmThread()		// NEED TO detect leader failures
+	time.Sleep(1 * time.Second)
+	replicationHandler.InitiateElection()
+	go replicationHandler.BullyAlgorithmThread()		// NEED TO detect leader failures
 
 	for _, addr := range server.BackupNodes {
 		fmt.Printf("%s:%d\n", addr.Address, addr.Port)
