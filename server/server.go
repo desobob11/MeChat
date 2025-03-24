@@ -110,7 +110,7 @@ func Initialize(PID int) *Server {
 
 	server := &Server{
 		PID:         PID,
-		IsLeader:    (PID == 0), // Node with PID 0 is the leader
+		IsLeader:    (ADDRESS_OFFSET == 0), // Node with PID 0 is the leader
 		BackupNodes: otherReplicas,
 		AddressPort: REPLICA_ADDRESSES[ADDRESS_OFFSET],
 	}
@@ -202,11 +202,8 @@ func (s *Server) ReplicateToBackups(entry LogEntry) {
 	}
 
 	for _, addr := range s.BackupNodes {
-
-		fmt.Println("TRYING TO WRITE TO BACKUP")
-
 		addr_string := fmt.Sprintf("%s:%d", addr.Address, addr.Port)
-		caller, err := net.DialTimeout("tcp", addr_string, 1*time.Second)		// need a timeout here, else this hangs if backup not reachable
+		caller, err := net.DialTimeout("tcp", addr_string, 3*time.Second)		// need a timeout here, else this hangs if backup not reachable
 
 
 		if err != nil {
@@ -294,7 +291,8 @@ func (r *ReplicationHandler) ApplyEntries(req *ReplicationRequest, resp *Replica
 	s := r.server
 	log.Printf("Node %d: Received %d entries for replication", s.PID, len(req.Entries))
 
-	// Reject if we're the leader
+
+	// Reject if we're the leader		
 	if s.IsLeader {
 		resp.Success = false
 		resp.Message = "leader cannot accept replication requests"
@@ -308,7 +306,7 @@ func (r *ReplicationHandler) ApplyEntries(req *ReplicationRequest, resp *Replica
 			log.Printf("Node %d: Skipping duplicate entry %d", s.PID, entry.Index)
 			continue
 		}
-
+		
 		// Check for gaps in the log
 		if entry.Index > s.LogIndex+1 {
 			resp.Success = false
