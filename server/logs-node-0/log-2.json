@@ -1,0 +1,12 @@
+{
+  "index": 2,
+  "sql": "INSERT INTO messages (\n\t\t[from_userid], \n\t\t[to_userid], \n\t\t[message], \n\t\t[timestamp], \n\t\t[acked]) \n\t\tVALUES (?, ?, ?, ?, ?);",
+  "args": [
+    1,
+    2,
+    "testing here",
+    "19:43",
+    1
+  ],
+  "timestamp": "2025-03-23T19:43:58.678888147-06:00"
+}

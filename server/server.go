@@ -202,14 +202,20 @@ func (s *Server) ReplicateToBackups(entry LogEntry) {
 	}
 
 	for _, addr := range s.BackupNodes {
+
+		fmt.Println("TRYING TO WRITE TO BACKUP")
+
 		addr_string := fmt.Sprintf("%s:%d", addr.Address, addr.Port)
-		client, err := rpc.Dial("tcp", addr_string)
+		caller, err := net.DialTimeout("tcp", addr_string, 1*time.Second)		// need a timeout here, else this hangs if backup not reachable
+
+
 		if err != nil {
 			log.Printf("Node %d: Failed to connect to backup %s: %v", s.PID, addr_string, err)
 			continue
 		}
 
 		var resp ReplicationResponse
+		client := rpc.NewClient(caller)
 		err = client.Call("ReplicationHandler.ApplyEntries", req, &resp)
 		client.Close()
 
@@ -380,14 +386,14 @@ func main() {
 	
 	REPLICA_ADDRESSES = ReadReplicaAddresses(ADDRESS_FILE)	// all addresses, including own
 
-	for i, addr := range REPLICA_ADDRESSES {
-		fmt.Printf("%d %s:%d\n", i, addr.Address, addr.Port)
-	}
+
 
 	// Start the leader first (PID 0)
 	server := spawn_server(0)
 
-
+	for _, addr := range server.BackupNodes {
+		fmt.Printf("%s:%d\n", addr.Address, addr.Port)
+	}
 
 	// Give the leader time to initialize
 	time.Sleep(1 * time.Second)
