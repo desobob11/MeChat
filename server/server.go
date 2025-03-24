@@ -621,9 +621,9 @@ func main() {
 	go server.HandleRPC(fmt.Sprintf("%s:%d", server.AddressPort.Address, server.AddressPort.Port), &messageHandler, &replicationHandler)
 
 	
-	time.Sleep(1 * time.Second)
-	replicationHandler.InitiateElection()
-	go replicationHandler.BullyAlgorithmThread()		// NEED TO detect leader failures
+	// time.Sleep(1 * time.Second)
+	//replicationHandler.InitiateElection()
+	// go replicationHandler.BullyAlgorithmThread()		// NEED TO detect leader failures
 
 	for _, addr := range server.BackupNodes {
 		fmt.Printf("%s:%d\n", addr.Address, addr.Port)
