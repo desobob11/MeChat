@@ -205,7 +205,6 @@ func (s *Server) ReplicateToBackups(entry LogEntry) {
 		addr_string := fmt.Sprintf("%s:%d", addr.Address, addr.Port)
 		caller, err := net.DialTimeout("tcp", addr_string, 3*time.Second)		// need a timeout here, else this hangs if backup not reachable
 
-
 		if err != nil {
 			log.Printf("Node %d: Failed to connect to backup %s: %v", s.PID, addr_string, err)
 			continue
