@@ -10,11 +10,19 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
 	_ "modernc.org/sqlite"
 )
+// Struct to store address/port for replicas
+type ReplicaAddress struct {
+	Address string
+	Port uint16
+}
+
+var ADDRESS_OFFSET uint32
 
 // Server struct to encapsulate server state
 type Server struct {
@@ -24,7 +32,8 @@ type Server struct {
 	LogDir      string
 	LogIndex    int
 	LogMutex    sync.Mutex
-	BackupNodes []string
+	BackupNodes []ReplicaAddress
+	AddressPort ReplicaAddress
 }
 
 // Type definitions for replication
@@ -71,13 +80,39 @@ class Message {
 }
 */
 
+var ADDRESS_FILE = "replica_addrs.txt"
+var REPLICA_ADDRESSES []ReplicaAddress
+
+// function to read in hard-saved replica addresses
+func ReadReplicaAddresses(filename string) []ReplicaAddress {
+	var addrs []ReplicaAddress
+	bytes, _ := os.ReadFile(filename);
+
+	text := string(bytes)
+	lines := strings.Split(strings.ReplaceAll(text, "\r\n", "\n"), "\n")
+
+	for _, replica := range lines {
+		addr := strings.Split(replica, ":")[0]
+		port, _ := strconv.ParseUint(strings.Split(replica, ":")[1], 10, 16)
+		addrs = append(addrs, ReplicaAddress {addr, uint16(port)})
+	}
+
+	return addrs
+}
+
 // Initialize creates a new server instance
 func Initialize(PID int) *Server {
 	// Init Server
+
+	newArray := append([]ReplicaAddress{}, REPLICA_ADDRESSES...)
+	otherReplicas := append(newArray[:ADDRESS_OFFSET], newArray[ADDRESS_OFFSET + 1:]...)
+	
+
 	server := &Server{
 		PID:         PID,
 		IsLeader:    (PID == 0), // Node with PID 0 is the leader
-		BackupNodes: make([]string, 0),
+		BackupNodes: otherReplicas,
+		AddressPort: REPLICA_ADDRESSES[ADDRESS_OFFSET],
 	}
 
 	// Init Log
@@ -167,10 +202,10 @@ func (s *Server) ReplicateToBackups(entry LogEntry) {
 	}
 
 	for _, addr := range s.BackupNodes {
-
-		client, err := rpc.Dial("tcp", addr)
+		addr_string := fmt.Sprintf("%s:%d", addr.Address, addr.Port)
+		client, err := rpc.Dial("tcp", addr_string)
 		if err != nil {
-			log.Printf("Node %d: Failed to connect to backup %s: %v", s.PID, addr, err)
+			log.Printf("Node %d: Failed to connect to backup %s: %v", s.PID, addr_string, err)
 			continue
 		}
 
@@ -179,15 +214,15 @@ func (s *Server) ReplicateToBackups(entry LogEntry) {
 		client.Close()
 
 		if err != nil {
-			log.Printf("Node %d: Failed to replicate to %s: %v", s.PID, addr, err)
+			log.Printf("Node %d: Failed to replicate to %s: %v", s.PID, addr_string, err)
 		} else if !resp.Success {
-			log.Printf("Node %d: Replication to %s failed: %s", s.PID, addr, resp.Message)
+			log.Printf("Node %d: Replication to %s failed: %s", s.PID, addr_string, resp.Message)
 		}
 	}
 }
 
 // Method to set backup nodes
-func (s *Server) SetBackupNodes(addresses []string) {
+func (s *Server) SetBackupNodes(addresses []ReplicaAddress) {
 	if s.IsLeader {
 		s.BackupNodes = addresses
 		// log.Printf("Leader node %d will replicate to: %v", s.PID, s.BackupNodes)
@@ -222,7 +257,7 @@ func (s *Server) HandleRPC(rpc_address string) {
 }
 
 // Spawn a server with the given PID and port
-func spawn_server(PID int, port int) *Server {
+func spawn_server(PID int) *Server {
 	// log.Printf("Spawning server %d on port %d", PID, port)
 
 	// Initialize the server
@@ -233,8 +268,7 @@ func spawn_server(PID int, port int) *Server {
 	}
 
 	// Start RPC server
-	serveraddress := RPC_ADDRESS + strconv.Itoa(port)
-	go server.HandleRPC(serveraddress)
+	go server.HandleRPC(fmt.Sprintf("%s:%d", server.AddressPort.Address, server.AddressPort.Port))
 
 	return server
 }
@@ -326,4 +360,43 @@ func (r *ReplicationHandler) ApplyEntries(req *ReplicationRequest, resp *Replica
 	resp.Success = true
 	resp.LastIndex = s.LogIndex
 	return nil
+}
+
+
+
+
+
+func main() {
+	// Configuration
+
+	offset, err := strconv.ParseUint(os.Args[1], 10, 32)
+
+	if err != nil {
+		fmt.Println(`Command line error, please run server using this command: go run . <offset>\n\n
+					 Where offset is the 0-indexed number corresponding to the desired address in the address file`)
+	}
+
+	ADDRESS_OFFSET = uint32(offset)
+	
+	REPLICA_ADDRESSES = ReadReplicaAddresses(ADDRESS_FILE)	// all addresses, including own
+
+	for i, addr := range REPLICA_ADDRESSES {
+		fmt.Printf("%d %s:%d\n", i, addr.Address, addr.Port)
+	}
+
+	// Start the leader first (PID 0)
+	server := spawn_server(0)
+
+
+
+	// Give the leader time to initialize
+	time.Sleep(1 * time.Second)
+
+	fmt.Printf("Replica %d running at %s:%d\n", ADDRESS_OFFSET, server.AddressPort.Address, server.AddressPort.Port)
+	fmt.Println("Clients may now connect")
+
+	// Wait forever
+	select {}
+	
+	
 }

@@ -16,7 +16,8 @@ import (
 	"net/rpc"
 	"sync"
     "crypto/sha256"
-
+    "os"
+    "strings"
 	"github.com/rs/cors"
 )
 
@@ -271,6 +272,8 @@ func CreateAccount(w http.ResponseWriter, req *http.Request) {
 
 
 
+ 
+
 func HTTPThread() {
     serv := http.NewServeMux()
     serv.HandleFunc("/incoming", HandleIncoming)
@@ -281,13 +284,42 @@ func HTTPThread() {
     http.ListenAndServe("127.0.0.1:8090", cors.Default().Handler(serv))
 }
 
+type ReplicaAddress struct {
+	Address string
+	Port uint16
+}
+
+var ADDRESS_FILE = "replica_addrs.txt"
+var REPLICA_ADDRESSES []ReplicaAddress
+var ACTIVE_REPLICA ReplicaAddress
+
+// function to read in hard-saved replica addresses
+func ReadReplicaAddresses(filename string) []ReplicaAddress {
+	var addrs []ReplicaAddress
+	bytes, _ := os.ReadFile(filename);
+
+	text := string(bytes)
+	lines := strings.Split(strings.ReplaceAll(text, "\r\n", "\n"), "\n")
+
+	for _, replica := range lines {
+		addr := strings.Split(replica, ":")[0]
+		port, _ := strconv.ParseUint(strings.Split(replica, ":")[1], 10, 16)
+		addrs = append(addrs, ReplicaAddress {addr, uint16(port)})
+	}
+
+	return addrs
+}
 
 var rpc_client *rpc.Client
 
 
 func main() {
+
+    REPLICA_ADDRESSES = ReadReplicaAddresses(ADDRESS_FILE)
+    ACTIVE_REPLICA = REPLICA_ADDRESSES[0]
+
     var err error
-    rpc_client, err = rpc.Dial("tcp", RPC_ADDRESS)
+    rpc_client, err = rpc.Dial("tcp", fmt.Sprintf("%s:%d", ACTIVE_REPLICA.Address, ACTIVE_REPLICA.Port))
     if err != nil {
         log.Fatal("Failed to connect to RPC", err)
     }
