@@ -458,14 +458,14 @@ func (r *ReplicationHandler) BullyElection(msg *BullyMessage, resp *ReplicationR
 func (r* ReplicationHandler) BullyAlgorithmThread() {
 	for {
 
-		for !r.BullyFailureDetector() || r.server.LeaderID == r.server.PID {	// check for leader every five seconds
-			fmt.Println("Leader is online...")
+		for !r.BullyFailureDetector() {	// check for leader every five seconds
+			fmt.Printf("Leader %d is online...\n", r.server.LeaderID)
+			
 			time.Sleep(5 * time.Second)
 		}
 
 
 		// leader is dead
-		fmt.Println("CALLING ELECTION")
 
 		r.InitiateElection()
 
@@ -497,8 +497,15 @@ func (s* Server) IsHighestId() bool {
 
 func SendBullyMessage(replica ReplicaAddress, funcName string, msg BullyMessage, resp *ReplicationResponse) error {
 	addr_string := fmt.Sprintf("%s:%d", replica.Address, replica.Port)
-	client, _ := rpc.Dial("tcp", addr_string)			// skippeing error for now
-	err := client.Call(fmt.Sprintf("ReplicationHandler.%s", funcName), msg, &resp)		// skipping error here as well
+	caller, err := net.DialTimeout("tcp", addr_string, 1*time.Second)		// need a timeout here, else this hangs if backup not reachable
+
+	if err != nil {
+		fmt.Printf("Replica at %s is offline\n", addr_string)
+		return err
+	}
+	client := rpc.NewClient(caller)
+	//rpc.Dial("tcp", addr_string)			// skippeing error for now
+	err = client.Call(fmt.Sprintf("ReplicationHandler.%s", funcName), msg, resp)		// skipping error here as well
 	return err
 }
 
@@ -506,10 +513,10 @@ func SendBullyMessage(replica ReplicaAddress, funcName string, msg BullyMessage,
 func  (r *ReplicationHandler) InitiateElection() bool {
 	r.server.Running = true;
 	current_leader := r.server.LeaderID		// trying to use this for changes
-
-	if r.server.PID == len(r.server.BackupNodes) {
+	fmt.Println("CALLING ELECTION")
+	if r.server.PID == len(r.server.BackupNodes) - 1 {
 		for _, replica := range r.server.BackupNodes {
-			if IsAddressSelf(r.server.AddressPort, replica) || replica == r.server.BackupNodes[r.server.LeaderID] { 			// skip crashed leader and self
+			if IsAddressSelf(r.server.AddressPort, replica) { 			// skip crashed leader and self
 				continue
 			}
 			var resp ReplicationResponse
@@ -526,20 +533,20 @@ func  (r *ReplicationHandler) InitiateElection() bool {
 			SendBullyMessage(replica, "BullyElection", msg, &electionResponse)
 		
 		}
-		time.Sleep(3 * time.Second)		// probably much too long
+		time.Sleep(1 * time.Second)		// probably much too long
 		
 		if electionResponse.LastIndex == -1 {	// no response
 			r.server.LeaderID = r.server.PID
 			for j, replica := range r.server.BackupNodes {
 				// skip self
-				if j != r.server.LeaderID {	
+				if j != r.server.PID {	
 					continue
 				}
 				msg := BullyMessage{PID: r.server.PID, Message: "LEADER"}
 				SendBullyMessage(replica, "BullyLeader", msg, nil)
 			}
 		} else {
-			time.Sleep(3 * time.Second)
+			time.Sleep(1 * time.Second)
 			if r.server.LeaderID == current_leader {			// no leader change
 				r.InitiateElection()
 			} else {			// other process already told me to update my leader
@@ -554,24 +561,29 @@ func  (r *ReplicationHandler) InitiateElection() bool {
 
 
 func  (r *ReplicationHandler) BullyFailureDetector() bool {
+	if r.server.PID == r.server.LeaderID {
+		return false			// leader can't detect its own failures
+	}
+
 	leader_addr := r.server.BackupNodes[r.server.LeaderID]
 	addr_string := fmt.Sprintf("%s:%d", leader_addr.Address, leader_addr.Port)
 	caller, err := net.DialTimeout("tcp", addr_string, 3*time.Second)		// need a timeout here, else this hangs if backup not reachable
 	if err != nil {
-		fmt.Println("Leader down")
+		fmt.Printf("Leader down: %s\n", err)
 		return true
 	}
 
 	var resp ReplicationResponse
+	var msg ReplicationRequest
 	client := rpc.NewClient(caller)
-	err = client.Call("ReplicationHandler.IsStatusOK", nil, &resp)
+	err = client.Call("ReplicationHandler.IsStatusOK", msg, &resp)
 	if err != nil {
-		fmt.Println("Leader down")
+		fmt.Printf("Leader down: %s\n", err)
 		return true
 	}
 
 	if resp.Message != "STATUSOK" {
-		fmt.Println("Leader down")
+		fmt.Printf("Leader down: %s\n", err)
 		return true
 	}
 	return false;
@@ -607,6 +619,10 @@ func main() {
 	
 	// Start RPC server
 	go server.HandleRPC(fmt.Sprintf("%s:%d", server.AddressPort.Address, server.AddressPort.Port), &messageHandler, &replicationHandler)
+
+	
+	time.Sleep(1 * time.Second)
+	replicationHandler.InitiateElection()
 	go replicationHandler.BullyAlgorithmThread()		// NEED TO detect leader failures
 
 	for _, addr := range server.BackupNodes {
