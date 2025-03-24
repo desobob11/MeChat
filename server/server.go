@@ -424,6 +424,8 @@ func (r *ReplicationHandler) ApplyEntries(req *ReplicationRequest, resp *Replica
 
 
 func (r *ReplicationHandler) IsStatusOK(req *ReplicationRequest, resp *ReplicationResponse) error {
+	r.mutex.Lock()
+	defer r.mutex.Unlock()
 	resp.Success = true;
 	resp.LastIndex = -1;
 	resp.Message = "STATUSOK"
@@ -435,6 +437,8 @@ func (r *ReplicationHandler) IsStatusOK(req *ReplicationRequest, resp *Replicati
 */
 
 func (r *ReplicationHandler) BullyLeader(msg *BullyMessage, resp *ReplicationResponse) error {
+	r.mutex.Lock()
+	defer r.mutex.Unlock()
 	r.server.LeaderID = msg.PID
 	r.server.Running = false
 	fmt.Printf("MY LEADER IS %d\n", msg.PID)
@@ -442,6 +446,8 @@ func (r *ReplicationHandler) BullyLeader(msg *BullyMessage, resp *ReplicationRes
 }
 
 func (r *ReplicationHandler) BullyElection(msg *BullyMessage, resp *ReplicationResponse) error {
+	r.mutex.Lock()
+	defer r.mutex.Unlock()
 	if msg.PID < r.server.PID {
 		resp.LastIndex = r.server.PID		// bullied it
 		if !r.server.Running {
@@ -517,6 +523,7 @@ func  (r *ReplicationHandler) InitiateElection() bool {
 			var resp ReplicationResponse
 			msg := BullyMessage{PID: r.server.PID, Message: "LEADER"}
 			r.server.LeaderID = r.server.PID
+			r.server.Running = false
 			SendBullyMessage(replica, "BullyLeader", msg, &resp)
 		}
 	} else {
@@ -532,7 +539,7 @@ func  (r *ReplicationHandler) InitiateElection() bool {
 		time.Sleep(1 * time.Second)		// probably much too long
 
 
-		fmt.Printf("%d\n", electionResponse.LastIndex)
+		fmt.Printf("LEADER %d %d\n", current_leader, r.server.LeaderID)
 		
 		if electionResponse.LastIndex == -1 {	// no response
 			r.server.LeaderID = r.server.PID
