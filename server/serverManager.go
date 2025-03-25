@@ -1,10 +1,12 @@
 package main
 
 import (
-	"fmt"
-	"time"
+	_ "fmt"
+	_ "time"
 )
 
+
+/*
 func main() {
 	// Configuration
 	basePort := 9999
@@ -42,3 +44,4 @@ func main() {
 	// Wait forever
 	select {}
 }
+	*/

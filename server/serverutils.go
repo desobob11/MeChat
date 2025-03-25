@@ -72,8 +72,12 @@ type NodeInfo struct {
 	IsLeader bool `json:"is_leader"`
 }
 
+type LeaderId struct {
+	LeaderID int
+}
+
 func GenerateDatabaseName(PID int) string {
-	return "mechat" + fmt.Sprintf("%d", PID) + ".sqlite"
+	return "mechat0.sqlite"
 }
 
 /*
@@ -84,7 +88,7 @@ func (t *MessageHandler) SaveMessage(message *ChatMessage, response *string) err
 	defer t.mutex.Unlock()
 
 	// Do not write if we arent the leader
-	if !t.server.IsLeader {
+	if t.server.LeaderID != t.server.PID {
 		*response = "not the leader node"
 		return fmt.Errorf("not the leader node")
 	}
