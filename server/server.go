@@ -65,6 +65,10 @@ type ReplicationResponse struct {
 	Message   string `json:"message,omitempty"`
 }
 
+type IDNumber struct {
+	ID int
+}
+
 // Moved from serverUtils
 type MessageHandler struct {
 	mutex  sync.Mutex
@@ -457,53 +461,34 @@ func (r *ReplicationHandler) BullyElection(msg *BullyMessage, resp *ReplicationR
 }
 
 
-
-
-
 func (r* ReplicationHandler) BullyAlgorithmThread() {
 	for {
-
 		for !r.BullyFailureDetector() {	// check for leader every five seconds
 			fmt.Printf("Leader %d is online...\n", r.server.LeaderID)
 			
 			time.Sleep(5 * time.Second)
 		}
 
-
 		// leader is dead
-
 		r.InitiateElection()
-
-
 	}
 }
 
 
-/*
-func (s* Server) IsHighestId() bool {
-	for i, replica := range s.BackupNodes {
-		//if !IsAddressSelf(s.AddressPort, replica) && i != s.LeaderID {		// send to all but self and crashed leader
-			if s.PID < i {	// if my PID is not max
-				
-			}
-			
-
-		}
-	}
+func (r *MessageHandler) GetPID(msg *IDNumber, resp *IDNumber) error {
+	resp.ID = r.server.PID
+	return nil
 }
-	*/
 
 
 func SendBullyMessage(replica ReplicaAddress, funcName string, msg BullyMessage, resp *ReplicationResponse) error {
 	addr_string := fmt.Sprintf("%s:%d", replica.Address, replica.Port)
 	caller, err := net.DialTimeout("tcp", addr_string, 1*time.Second)		// need a timeout here, else this hangs if backup not reachable
-
 	if err != nil {
 		fmt.Printf("Replica at %s is offline\n", addr_string)
 		return err
 	}
 	client := rpc.NewClient(caller)
-	//rpc.Dial("tcp", addr_string)			// skippeing error for now
 	err = client.Call(fmt.Sprintf("ReplicationHandler.%s", funcName), msg, resp)		// skipping error here as well
 	return err
 }
@@ -511,7 +496,6 @@ func SendBullyMessage(replica ReplicaAddress, funcName string, msg BullyMessage,
 
 func  (r *ReplicationHandler) InitiateElection() bool {
 	r.server.Running = true;
-	current_leader := r.server.LeaderID		// trying to use this for changes
 	fmt.Println("CALLING ELECTION")
 
 	if r.server.PID == len(r.server.BackupNodes) - 1 {
@@ -597,7 +581,6 @@ func  (r *ReplicationHandler) BullyFailureDetector() bool {
 
 
 func main() {
-	// Configuration
 	// Configuration
 
 	

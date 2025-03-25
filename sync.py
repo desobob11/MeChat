@@ -8,4 +8,3 @@ for i in range(4):
             data = src.read()
             with open(f"C:/Users/Des/replicas/r{i}/server/{f}", "wb") as dest:
                 dest.write(data)
-

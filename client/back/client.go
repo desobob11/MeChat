@@ -2,26 +2,38 @@ package main
 
 import (
 	//  "bufio"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"log"
-    "strconv"
-    "encoding/hex"
+	_ "log"
+	"net"
+	"strconv"
+
 	//  "log"
 	"io"
 	//  "net"
 	"net/http"
 	//"strings"
+	"crypto/sha256"
 	"database/sql"
 	"net/rpc"
+	"os"
+	"strings"
 	"sync"
-    "crypto/sha256"
-    "os"
-    "strings"
+    "time"
 	"github.com/rs/cors"
 )
 
+var ADDRESS_FILE = "replica_addrs.txt"
+var REPLICA_ADDRESSES []ReplicaAddress
+var ACTIVE_REPLICA ReplicaAddress
 
+type ReplicaAddress struct {
+	Address string
+	Port uint16
+}
+
+var rpc_client *rpc.Client
 
 type ChatMessage struct {
     Message string
@@ -76,8 +88,14 @@ type MessageHandler struct {
     db *sql.DB
 }
 
+type IDNumber struct {
+	ID int
+}
+
 
 const RPC_ADDRESS = "127.0.0.1:9999"    // localhost for now
+
+
 
 
 func HandleIncoming(w http.ResponseWriter, req *http.Request) {
@@ -109,13 +127,83 @@ func HandleIncoming(w http.ResponseWriter, req *http.Request) {
     var response string
    resp := rpc_client.Call("MessageHandler.SaveMessage", messageToBack, &response)
    if resp != nil  {
-    fmt.Println("Error response from SaveMessage RPC ", response)
+    fmt.Println("Error response from SaveMessage RPC ", resp)
     w.WriteHeader(http.StatusBadRequest)
    } else {
     fmt.Println(data)
     w.WriteHeader(http.StatusOK)
    }
 
+}
+
+func contains(arr []int, target int) bool {
+	for _, v := range arr {
+		if v == target {
+			return true
+		}
+	}
+	return false
+}
+
+func ConfirmLeader() bool {
+   // leaderIds := []int{}
+    leaderId := -1
+    for _, replica := range REPLICA_ADDRESSES {
+        caller, err := net.DialTimeout("tcp", fmt.Sprintf("%s:%d", replica.Address, replica.Port), 1 * time.Second)
+
+        if err == nil {
+            var pid IDNumber
+            msg := IDNumber{-1}
+            client := rpc.NewClient(caller)
+            client.Call("MessageHandler.GetPID", msg, &pid)
+            if pid.ID > leaderId {
+                leaderId = pid.ID
+            }
+        }
+    }
+    if leaderId == -1 {
+        return false
+    }
+
+    ACTIVE_REPLICA = REPLICA_ADDRESSES[leaderId]
+    rpc_client, _ = rpc.Dial("tcp", fmt.Sprintf("%s:%d", ACTIVE_REPLICA.Address, ACTIVE_REPLICA.Port))
+    return true
+
+}
+
+func RemoteProcedureCall(funcName string, args any, reply any) error {
+
+    // check connection
+   // _, err := net.DialTimeout("tcp", fmt.Sprintf("%s:%d", ACTIVE_REPLICA.Address, ACTIVE_REPLICA.Port), 5 * time.Second)
+    
+   leaderFound := ConfirmLeader()
+   for !leaderFound {
+       leaderFound = ConfirmLeader()       // sets rpc_client
+   }
+   fmt.Printf("Leader is now: %s:%d\n", ACTIVE_REPLICA.Address, ACTIVE_REPLICA.Port)
+   rpc_client.Call(funcName, args, reply)      // check for highest leader everytime
+
+
+
+    // if could not connect, need to find new lead
+    /*
+    if err != nil {
+        fmt.Println("Leader is down, will find new leader")
+        leaderFound := ConfirmLeader()
+        for !leaderFound {
+            leaderFound = ConfirmLeader()       // sets rpc_client
+        }
+        time.Sleep(3 * time.Second)
+        fmt.Printf("Leader: %s:%d\n", ACTIVE_REPLICA.Address, ACTIVE_REPLICA.Port)
+        rpc_client.Call(funcName, args, reply)
+    } else {
+        rpc_client.Call(funcName, args, reply)      // all good
+    }
+        */
+
+
+    return nil
+    
 }
 
 
@@ -160,7 +248,7 @@ func CreateAccount(w http.ResponseWriter, req *http.Request) {
 
 
     var response RPCResponse
-    resp := rpc_client.Call("MessageHandler.CreateAccount", messageToBack, &response)
+    resp := RemoteProcedureCall("MessageHandler.CreateAccount", messageToBack, &response)
 
 
     if resp != nil  {
@@ -201,7 +289,7 @@ func CreateAccount(w http.ResponseWriter, req *http.Request) {
 
 
     var response UserProfile
-    resp := rpc_client.Call("MessageHandler.Login", messageToBack, &response)
+    resp := RemoteProcedureCall("MessageHandler.Login", messageToBack, &response)
 
 
     if resp != nil  {
@@ -233,7 +321,7 @@ func CreateAccount(w http.ResponseWriter, req *http.Request) {
     }
 
     var response Contacts
-    resp := rpc_client.Call("MessageHandler.GetContacts", messageToBack, &response)
+    resp := RemoteProcedureCall("MessageHandler.GetContacts", messageToBack, &response)
 
     if resp != nil  {
      fmt.Println(response);
@@ -258,7 +346,7 @@ func CreateAccount(w http.ResponseWriter, req *http.Request) {
     }
 
     var response MessageList
-    resp := rpc_client.Call("MessageHandler.GetMessages", messageToBack, &response)
+    resp := RemoteProcedureCall("MessageHandler.GetMessages", messageToBack, &response)
 
     if resp != nil  {
      fmt.Println(response);
@@ -270,9 +358,7 @@ func CreateAccount(w http.ResponseWriter, req *http.Request) {
     }
  }
 
-func attemptRPCCall(serviceMethod string, args any, reply any) err {
-    
-}
+
 
  
 
@@ -286,14 +372,7 @@ func HTTPThread() {
     http.ListenAndServe("127.0.0.1:8090", cors.Default().Handler(serv))
 }
 
-type ReplicaAddress struct {
-	Address string
-	Port uint16
-}
 
-var ADDRESS_FILE = "replica_addrs.txt"
-var REPLICA_ADDRESSES []ReplicaAddress
-var ACTIVE_REPLICA ReplicaAddress
 
 // function to read in hard-saved replica addresses
 func ReadReplicaAddresses(filename string) []ReplicaAddress {
@@ -312,20 +391,24 @@ func ReadReplicaAddresses(filename string) []ReplicaAddress {
 	return addrs
 }
 
-var rpc_client *rpc.Client
 
 
 func main() {
 
     REPLICA_ADDRESSES = ReadReplicaAddresses(ADDRESS_FILE)
-    ACTIVE_REPLICA = REPLICA_ADDRESSES[0]
+    //ACTIVE_REPLICA = REPLICA_ADDRESSES[0]
 
-    var err error
-    rpc_client, err = rpc.Dial("tcp", fmt.Sprintf("%s:%d", ACTIVE_REPLICA.Address, ACTIVE_REPLICA.Port))
-    if err != nil {
-        log.Fatal("Failed to connect to RPC", err)
+   // var err error
+    //rpc_client, err = rpc.Dial("tcp", fmt.Sprintf("%s:%d", ACTIVE_REPLICA.Address, ACTIVE_REPLICA.Port))
+    //if err != nil {
+    //    log.Fatal("Failed to connect to RPC", err)
+    //}
+
+    leaderFound := ConfirmLeader()
+    for !leaderFound {
+        leaderFound = ConfirmLeader()
     }
-
+    fmt.Printf("Leader: %s:%d\n", ACTIVE_REPLICA.Address, ACTIVE_REPLICA.Port)
     fmt.Println("RPC connection succeeded.")
     fmt.Println(rpc_client)
     var wg sync.WaitGroup
