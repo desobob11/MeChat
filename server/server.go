@@ -118,10 +118,10 @@ func Initialize(PID int) *Server {
 
 	server := &Server{
 		PID:         int(ADDRESS_OFFSET),
-		IsLeader:    (ADDRESS_OFFSET == 0), // Node with PID 0 is the leader
+		IsLeader:    (ADDRESS_OFFSET == uint32((len(REPLICA_ADDRESSES) - 1))), // Node with PID 0 is the leader
 		BackupNodes: REPLICA_ADDRESSES,
 		AddressPort: REPLICA_ADDRESSES[ADDRESS_OFFSET],
-		LeaderID: 0,					// leader is always first IP when the service is kicked off
+		LeaderID: len(REPLICA_ADDRESSES) - 1,					// leader is always first IP when the service is kicked off
 		Running: false,
 	}
 
@@ -450,7 +450,7 @@ func (r *ReplicationHandler) BullyElection(msg *BullyMessage, resp *ReplicationR
 	defer r.mutex.Unlock()
 	if msg.PID < r.server.PID {
 		resp.LastIndex = r.server.PID		// bullied it
-		if !r.server.Running {
+		if !r.server.Running && r.server.LeaderID != r.server.PID {
 			go r.InitiateElection()		// THIS SHOULD PROBABLY NOT BE CALLED IN THE RPC...
 		}
 	}
@@ -545,19 +545,19 @@ func  (r *ReplicationHandler) InitiateElection() bool {
 			r.server.LeaderID = r.server.PID
 			for j, replica := range r.server.BackupNodes {
 				// skip self
-				if j != r.server.PID {	
+				if j == r.server.PID {	
 					continue
 				}
 				msg := BullyMessage{PID: r.server.PID, Message: "LEADER"}
 				SendBullyMessage(replica, "BullyLeader", msg, nil)
 			}
 		} else {
-			time.Sleep(1 * time.Second)
-			if r.server.LeaderID == current_leader {			// no leader change
-				r.InitiateElection()
-			} else {			// other process already told me to update my leader
+			//time.Sleep(1 * time.Second)
+			//if r.server.LeaderID == current_leader {			// no leader change
+			//	r.InitiateElection()
+			//} else {			// other process already told me to update my leader
 				r.server.Running = false
-			}
+			//}
 		}
 
 	}
