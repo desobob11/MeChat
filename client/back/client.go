@@ -149,7 +149,7 @@ func ConfirmLeader() bool {
    // leaderIds := []int{}
     leaderId := -1
     for _, replica := range REPLICA_ADDRESSES {
-        caller, err := net.DialTimeout("tcp", fmt.Sprintf("%s:%d", replica.Address, replica.Port), 1 * time.Second)
+        caller, err := net.DialTimeout("tcp", fmt.Sprintf("%s:%d", replica.Address, replica.Port), 100 * time.Millisecond)   // #TODO MAKE FINDING NEW LEADER BETTER
 
         if err == nil {
             var pid IDNumber

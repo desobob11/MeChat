@@ -125,7 +125,7 @@ func Initialize(PID int) *Server {
 		IsLeader:    (ADDRESS_OFFSET == uint32((len(REPLICA_ADDRESSES) - 1))), // Node with PID 0 is the leader
 		BackupNodes: REPLICA_ADDRESSES,
 		AddressPort: REPLICA_ADDRESSES[ADDRESS_OFFSET],
-		LeaderID: len(REPLICA_ADDRESSES) - 1,					// leader is always first IP when the service is kicked off
+		LeaderID: -1,					// leader is always first IP when the service is kicked off
 		Running: false,
 	}
 
@@ -253,6 +253,10 @@ func (s *Server) ReplicateToBackups(entry LogEntry) {
 	}
 }
 
+
+
+
+
 // Method to set backup nodes
 func (s *Server) SetBackupNodes(addresses []ReplicaAddress) {
 	if s.IsLeader {
@@ -347,7 +351,7 @@ func (r *ReplicationHandler) ApplyEntries(req *ReplicationRequest, resp *Replica
 
 	
 	// Reject if we're the leader		
-	if s.IsLeader {
+	if s.LeaderID == s.PID {
 		resp.Success = false
 		resp.Message = "leader cannot accept replication requests"
 		return nil
@@ -577,7 +581,70 @@ func  (r *ReplicationHandler) BullyFailureDetector() bool {
 }
 
 
+func (r *ReplicationHandler) CatchupReplica(msg IDNumber, resp *IDNumber) error {
 
+
+	reqs, err := ReadAllEntires(r.server)
+	if err != nil {
+		fmt.Printf("Error: %s", err)
+	}
+
+	req := ReplicationRequest{Entries: reqs}
+	addr := r.server.BackupNodes[msg.ID]
+//	for _, req := range s.BackupNodes {
+
+
+
+		addr_string := fmt.Sprintf("%s:%d", addr.Address, addr.Port)
+		caller, err := net.DialTimeout("tcp", addr_string, 3*time.Second)		// need a timeout here, else this hangs if backup not reachable
+
+		if err != nil {
+			log.Printf("Node %d: Failed to connect to backup %s: %v", r.server.PID, addr_string, err)
+		}
+
+		var to_resp ReplicationResponse
+		client := rpc.NewClient(caller)
+		err = client.Call("ReplicationHandler.ApplyEntries", req, &to_resp)
+		client.Close()
+
+		if err != nil {
+			log.Printf("Node %d: Failed to replicate to %s: %v", r.server.PID, addr_string, err)
+		} else if !to_resp.Success {
+			log.Printf("Node %d: Replication to %s failed: %s", r.server.PID, addr_string, to_resp.Message)
+		}
+	//}
+	resp.ID = -1
+	return nil
+}
+
+func ConfirmLeader(s *Server) bool {
+	// leaderIds := []int{}
+	 leaderId := -1
+	 for i, replica := range REPLICA_ADDRESSES {
+		if i == s.PID {
+			continue
+		}
+		 caller, err := net.DialTimeout("tcp", fmt.Sprintf("%s:%d", replica.Address, replica.Port), 1 * time.Second)
+ 
+		 if err == nil {
+			 var pid IDNumber
+			 msg := IDNumber{-1}
+			 client := rpc.NewClient(caller)
+			 client.Call("MessageHandler.GetPID", msg, &pid)
+			 if pid.ID > leaderId {
+				 leaderId = pid.ID
+			 }
+		 }
+	 }
+	 if leaderId == -1 {
+		 s.LeaderID = s.PID
+		 return false
+	 }
+ 
+	 s.LeaderID = leaderId
+	 return true
+ 
+ }
 
 
 func main() {
@@ -608,7 +675,32 @@ func main() {
 
 	
 	time.Sleep(1 * time.Second)
-	replicationHandler.InitiateElection()
+
+
+	ConfirmLeader(server)
+	fmt.Printf("LEADER: %d\n", server.LeaderID)
+	if server.LeaderID != server.PID {
+
+	
+	var resp IDNumber
+	leader_addr := server.BackupNodes[server.LeaderID]
+	addr_string := fmt.Sprintf("%s:%d", leader_addr.Address, leader_addr.Port)
+	caller, r_err := net.DialTimeout("tcp", addr_string, 1*time.Second)	// assuming that there will be no error, assuming ConfirmLeader works
+	fmt.Println("ERROR ", r_err)
+
+	client := rpc.NewClient(caller)
+	client.Call("ReplicationHandler.CatchupReplica", IDNumber{ID: server.PID}, &resp)
+
+	if resp.ID == -1 {
+		fmt.Println("Replica caught up")
+	}
+	client.Close()
+	}
+
+	if (server.LeaderID != server.PID) {
+		replicationHandler.InitiateElection()
+	}
+
 	go replicationHandler.BullyAlgorithmThread()		// NEED TO detect leader failures
 
 	for _, addr := range server.BackupNodes {
