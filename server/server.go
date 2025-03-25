@@ -450,7 +450,7 @@ func (r *ReplicationHandler) BullyElection(msg *BullyMessage, resp *ReplicationR
 	defer r.mutex.Unlock()
 	if msg.PID < r.server.PID {
 		resp.LastIndex = r.server.PID		// bullied it
-		if !r.server.Running && r.server.LeaderID != r.server.PID {
+		if !r.server.Running {
 			go r.InitiateElection()		// THIS SHOULD PROBABLY NOT BE CALLED IN THE RPC...
 		}
 	}
@@ -552,7 +552,7 @@ func  (r *ReplicationHandler) InitiateElection() bool {
 				SendBullyMessage(replica, "BullyLeader", msg, nil)
 			}
 		} else {
-			//time.Sleep(1 * time.Second)
+			time.Sleep(1 * time.Second)
 			//if r.server.LeaderID == current_leader {			// no leader change
 			//	r.InitiateElection()
 			//} else {			// other process already told me to update my leader
@@ -573,7 +573,7 @@ func  (r *ReplicationHandler) BullyFailureDetector() bool {
 
 	leader_addr := r.server.BackupNodes[r.server.LeaderID]
 	addr_string := fmt.Sprintf("%s:%d", leader_addr.Address, leader_addr.Port)
-	caller, err := net.DialTimeout("tcp", addr_string, 3*time.Second)		// need a timeout here, else this hangs if backup not reachable
+	caller, err := net.DialTimeout("tcp", addr_string, 5*time.Second)		// need a timeout here, else this hangs if backup not reachable
 	if err != nil {
 		fmt.Printf("Leader down: %s\n", err)
 		return true
