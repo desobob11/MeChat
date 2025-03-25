@@ -441,7 +441,6 @@ func (r *ReplicationHandler) BullyLeader(msg *BullyMessage, resp *ReplicationRes
 	defer r.mutex.Unlock()
 	r.server.LeaderID = msg.PID
 	r.server.Running = false
-	fmt.Printf("MY LEADER IS %d\n", msg.PID)
 	return nil
 }
 
@@ -538,8 +537,6 @@ func  (r *ReplicationHandler) InitiateElection() bool {
 		}
 		time.Sleep(1 * time.Second)		// probably much too long
 
-
-		fmt.Printf("LEADER %d %d\n", current_leader, r.server.LeaderID)
 		
 		if electionResponse.LastIndex == -1 {	// no response
 			r.server.LeaderID = r.server.PID
