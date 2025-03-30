@@ -28,16 +28,17 @@ var ADDRESS_OFFSET uint32
 
 // Server struct to encapsulate server state
 type Server struct {
-	PID         int
-	IsLeader    bool
-	DB          *sql.DB
-	LogDir      string
-	LogIndex    int
-	LogMutex    sync.Mutex
-	BackupNodes []ReplicaAddress
-	AddressPort ReplicaAddress
-	LeaderID    int
-	Running     bool
+	PID             int
+	IsLeader        bool
+	DB              *sql.DB
+	LogDir          string
+	LogIndex        int
+	LogMutex        sync.Mutex
+	BackupNodes     []ReplicaAddress
+	AddressPort     ReplicaAddress
+	LeaderID        int
+	Running         bool
+	TimestampOffset time.Duration
 }
 
 // Type definitions for replication
@@ -68,6 +69,12 @@ type ReplicationResponse struct {
 
 type IDNumber struct {
 	ID int
+}
+
+type TimeStamp struct {
+	ID    int
+	UTC   time.Time     // Replica -> Leader time
+	Delta time.Duration // Leader -> Replica telling them the adjustment to make
 }
 
 // Moved from serverUtils
@@ -121,12 +128,13 @@ func Initialize(PID int) *Server {
 	//otherReplicas := append(newArray[:ADDRESS_OFFSET], newArray[ADDRESS_OFFSET + 1:]...)
 
 	server := &Server{
-		PID:         int(ADDRESS_OFFSET),
-		IsLeader:    (ADDRESS_OFFSET == uint32((len(REPLICA_ADDRESSES) - 1))), // Node with PID 0 is the leader
-		BackupNodes: REPLICA_ADDRESSES,
-		AddressPort: REPLICA_ADDRESSES[ADDRESS_OFFSET],
-		LeaderID:    -1, // leader is always first IP when the service is kicked off
-		Running:     false,
+		PID:             int(ADDRESS_OFFSET),
+		IsLeader:        (ADDRESS_OFFSET == uint32((len(REPLICA_ADDRESSES) - 1))), // Node with PID 0 is the leader
+		BackupNodes:     REPLICA_ADDRESSES,
+		AddressPort:     REPLICA_ADDRESSES[ADDRESS_OFFSET],
+		LeaderID:        -1, // leader is always first IP when the service is kicked off
+		Running:         false,
+		TimestampOffset: 15 * time.Second,
 	}
 
 	// Init Log
@@ -177,6 +185,14 @@ func Initialize(PID int) *Server {
 	}
 
 	return server
+}
+
+func (s *Server) getTime() time.Time {
+	// if s.IsLeader {
+	// 	return time.Now()
+	// }
+	// If not the leader, return the UTC time adjusted by the sync offset
+	return time.Now().Add(s.TimestampOffset)
 }
 
 // Method to append an entry to the log
@@ -457,7 +473,7 @@ func (r *ReplicationHandler) BullyElection(msg *BullyMessage, resp *ReplicationR
 func (r *ReplicationHandler) BullyAlgorithmThread() {
 	for {
 		for !r.BullyFailureDetector() { // check for leader every five seconds
-			fmt.Printf("Leader %d is online...\n", r.server.LeaderID)
+			fmt.Printf("Leader %d is online... current time: %f\n", r.server.LeaderID, r.server.TimestampOffset.Seconds())
 
 			time.Sleep(5 * time.Second)
 		}
@@ -465,6 +481,82 @@ func (r *ReplicationHandler) BullyAlgorithmThread() {
 		// leader is dead
 		r.InitiateElection()
 	}
+}
+
+// func (r *ReplicationHandler) InitTime(msg TimeStamp, resp *TimeStamp) error {
+// 	// Initialize time for new replica
+// 	// Only the leader should be having this function called
+// 	resp.Delta = r.server.getTime().Sub(msg.UTC)
+// 	return nil
+// }
+
+func (r *ReplicationHandler) GetTime(msg TimeStamp, resp *TimeStamp) error {
+	resp.UTC = r.server.getTime()
+	return nil
+}
+
+func (r *ReplicationHandler) UpdateTime(msg TimeStamp, resp *TimeStamp) error {
+	r.mutex.Lock()
+	defer r.mutex.Unlock()
+
+	fmt.Print("Updating time: ", msg.Delta.Seconds(), "\n")
+	// Update the server's timestamp offset
+	r.server.TimestampOffset += msg.Delta
+	return nil
+}
+
+func (r *ReplicationHandler) SyncTime() error {
+
+	// Berkley Time Synchronization Algorithm
+
+	rpcClients := make([]*rpc.Client, 0, len(r.server.BackupNodes))
+
+	for _, addr := range r.server.BackupNodes {
+		caller, err := net.DialTimeout("tcp", net.JoinHostPort(addr.Address, fmt.Sprintf("%d", addr.Port)), 1*time.Second)
+		if err != nil {
+			continue
+		}
+		rpcClients = append(rpcClients, rpc.NewClient(caller))
+	}
+
+	if len(rpcClients) == 0 {
+		fmt.Printf("Error: No backup nodes available for time sync\n")
+		return nil
+	}
+
+	avg := time.Duration(0)
+	predictedClientTimes := make([]time.Time, len(rpcClients))
+	serverTimes := make([]time.Time, len(rpcClients))
+
+	for _, client := range rpcClients {
+		var resp TimeStamp
+		timeNow := r.server.getTime()
+		err := client.Call("ReplicationHandler.GetTime", TimeStamp{}, &resp)
+		if err != nil {
+			fmt.Printf("Error: %s", err)
+			continue
+		}
+
+		flightTime := r.server.getTime().Sub(timeNow) / 2
+		timeNow = r.server.getTime()
+		fmt.Printf("Node %d: Flight time: %f\n", r.server.PID, flightTime.Seconds())
+		predictedTime := resp.UTC.Add(flightTime)
+		avg += timeNow.Sub(predictedTime)
+		predictedClientTimes = append(predictedClientTimes, predictedTime)
+		serverTimes = append(serverTimes, timeNow)
+		fmt.Printf("Node %d time: %s vs server time: %s with avg diff: %f \n", r.server.PID, predictedTime.Format("15:04:05.000"), timeNow.Format("15:04:05.000"), avg.Seconds())
+	}
+	avg = avg / time.Duration(len(rpcClients))
+	r.server.TimestampOffset -= avg
+
+	fmt.Printf("Average time offset: %f, new server offset: %f \n", avg.Seconds(), r.server.TimestampOffset.Seconds())
+
+	for i, client := range rpcClients {
+		delta := serverTimes[i].Add(avg).Sub(predictedClientTimes[i])
+		client.Call("ReplicationHandler.UpdateTime", TimeStamp{Delta: delta}, TimeStamp{})
+	}
+
+	return nil
 }
 
 func (r *MessageHandler) GetPID(msg *IDNumber, resp *IDNumber) error {
@@ -537,7 +629,8 @@ func (r *ReplicationHandler) InitiateElection() bool {
 
 func (r *ReplicationHandler) BullyFailureDetector() bool {
 	if r.server.PID == r.server.LeaderID {
-		return false // leader can't detect its own failures
+		r.SyncTime() // Leader can do a time sync here instead of detecting leader failure
+		return false // leader can't detect its own failures, return false
 	}
 
 	leader_addr := r.server.BackupNodes[r.server.LeaderID]
@@ -671,6 +764,12 @@ func main() {
 		if resp.ID == -1 {
 			fmt.Println("Replica caught up")
 		}
+
+		// Initialize time for new replica
+		// var timeResp TimeStamp
+		// client.Call("ReplicationHandler.InitTime", TimeStamp{ID: server.PID, UTC: server.getTime()}, &timeResp)
+		// server.TimestampOffset = timeResp.Delta
+
 		client.Close()
 	}
 
