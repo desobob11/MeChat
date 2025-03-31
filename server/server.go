@@ -25,10 +25,12 @@ type ReplicaAddress struct {
 }
 
 var ADDRESS_OFFSET uint32
+var TIMESTAMP_OFFSET int = 0
 
 // Server struct to encapsulate server state
 type Server struct {
 	PID             int
+	Active          bool // Is server ready to accept connections?
 	IsLeader        bool
 	DB              *sql.DB
 	LogDir          string
@@ -134,7 +136,7 @@ func Initialize(PID int) *Server {
 		AddressPort:     REPLICA_ADDRESSES[ADDRESS_OFFSET],
 		LeaderID:        -1, // leader is always first IP when the service is kicked off
 		Running:         false,
-		TimestampOffset: 15 * time.Second,
+		TimestampOffset: time.Duration(TIMESTAMP_OFFSET) * time.Second,
 	}
 
 	// Init Log
@@ -473,7 +475,8 @@ func (r *ReplicationHandler) BullyElection(msg *BullyMessage, resp *ReplicationR
 func (r *ReplicationHandler) BullyAlgorithmThread() {
 	for {
 		for !r.BullyFailureDetector() { // check for leader every five seconds
-			fmt.Printf("Leader %d is online... current time: %f\n", r.server.LeaderID, r.server.TimestampOffset.Seconds())
+			fmt.Printf("Leader %d is online... \n", r.server.LeaderID)
+			fmt.Printf("Current time: %s | Offset is %fs \n", r.server.getTime().Format("15:04:05.000"), r.server.TimestampOffset.Seconds())
 
 			time.Sleep(5 * time.Second)
 		}
@@ -491,6 +494,9 @@ func (r *ReplicationHandler) BullyAlgorithmThread() {
 // }
 
 func (r *ReplicationHandler) GetTime(msg TimeStamp, resp *TimeStamp) error {
+	r.mutex.Lock()
+	defer r.mutex.Unlock()
+
 	resp.UTC = r.server.getTime()
 	return nil
 }
@@ -499,19 +505,24 @@ func (r *ReplicationHandler) UpdateTime(msg TimeStamp, resp *TimeStamp) error {
 	r.mutex.Lock()
 	defer r.mutex.Unlock()
 
-	fmt.Print("Updating time: ", msg.Delta.Seconds(), "\n")
+	// fmt.Print("Updating time: ", msg.Delta.Seconds(), "\n")
 	// Update the server's timestamp offset
 	r.server.TimestampOffset += msg.Delta
 	return nil
 }
 
 func (r *ReplicationHandler) SyncTime() error {
+	r.mutex.Lock()
+	defer r.mutex.Unlock()
 
 	// Berkley Time Synchronization Algorithm
 
 	rpcClients := make([]*rpc.Client, 0, len(r.server.BackupNodes))
 
 	for _, addr := range r.server.BackupNodes {
+		if IsAddressSelf(r.server.AddressPort, addr) { // skip self
+			continue
+		}
 		caller, err := net.DialTimeout("tcp", net.JoinHostPort(addr.Address, fmt.Sprintf("%d", addr.Port)), 1*time.Second)
 		if err != nil {
 			continue
@@ -523,36 +534,38 @@ func (r *ReplicationHandler) SyncTime() error {
 		fmt.Printf("Error: No backup nodes available for time sync\n")
 		return nil
 	}
+	fmt.Printf("Syncing time with %d nodes\n", len(rpcClients))
 
-	avg := time.Duration(0)
 	predictedClientTimes := make([]time.Time, len(rpcClients))
 	serverTimes := make([]time.Time, len(rpcClients))
+	avgs := make([]time.Duration, len(rpcClients))
+	avgSum := time.Duration(0)
 
-	for _, client := range rpcClients {
+	for i, client := range rpcClients {
 		var resp TimeStamp
-		timeNow := r.server.getTime()
+		before := r.server.getTime()
 		err := client.Call("ReplicationHandler.GetTime", TimeStamp{}, &resp)
 		if err != nil {
 			fmt.Printf("Error: %s", err)
 			continue
 		}
-
-		flightTime := r.server.getTime().Sub(timeNow) / 2
-		timeNow = r.server.getTime()
-		fmt.Printf("Node %d: Flight time: %f\n", r.server.PID, flightTime.Seconds())
+		after := r.server.getTime()
+		flightTime := after.Sub(before) / 2
 		predictedTime := resp.UTC.Add(flightTime)
-		avg += timeNow.Sub(predictedTime)
-		predictedClientTimes = append(predictedClientTimes, predictedTime)
-		serverTimes = append(serverTimes, timeNow)
-		fmt.Printf("Node %d time: %s vs server time: %s with avg diff: %f \n", r.server.PID, predictedTime.Format("15:04:05.000"), timeNow.Format("15:04:05.000"), avg.Seconds())
-	}
-	avg = avg / time.Duration(len(rpcClients))
-	r.server.TimestampOffset -= avg
+		predictedClientTimes[i] = predictedTime
+		serverTimes[i] = after
 
-	fmt.Printf("Average time offset: %f, new server offset: %f \n", avg.Seconds(), r.server.TimestampOffset.Seconds())
+		avgs[i] = predictedTime.Sub(after)
+		avgSum += predictedTime.Sub(after)
+	}
+
+	avgOffset := avgSum / time.Duration(len(rpcClients)+1) // Add 1 to the number of clients to include the leader's time in the average. Leader has 0 offset from itself though
+
+	r.server.TimestampOffset += avgOffset
 
 	for i, client := range rpcClients {
-		delta := serverTimes[i].Add(avg).Sub(predictedClientTimes[i])
+		delta := avgOffset - avgs[i]
+		fmt.Printf("Telling node %d to update time by %f, avgOffset=%f, it's offset = %f \n", i, delta.Seconds(), avgOffset.Seconds(), avgs[i].Seconds())
 		client.Call("ReplicationHandler.UpdateTime", TimeStamp{Delta: delta}, TimeStamp{})
 	}
 
@@ -729,8 +742,19 @@ func main() {
 	offset, err := strconv.ParseUint(os.Args[1], 10, 32)
 
 	if err != nil {
-		fmt.Println(`Command line error, please run server using this command: go run . <offset>\n\n
-					 Where offset is the 0-indexed number corresponding to the desired address in the address file`)
+		fmt.Println(`Command line error, please run server using this command: go run . <offset> <optional:timestampOffset>\n\n
+		Where offset is the 0-indexed number corresponding to the desired address in the address file\n
+		And where timestampOffset is the UTC offset in seconds`)
+		return
+	}
+
+	if len(os.Args) > 2 {
+		timestampOffset, err := strconv.ParseInt(os.Args[2], 10, 32)
+		if err != nil {
+			fmt.Println("Error parsing timestamp offset, please specify integer Timestamp Offset in seconds")
+			return
+		}
+		TIMESTAMP_OFFSET = int(timestampOffset)
 	}
 
 	ADDRESS_OFFSET = uint32(offset)
@@ -787,6 +811,7 @@ func main() {
 	time.Sleep(1 * time.Second)
 
 	fmt.Printf("Replica %d running at %s:%d\n", ADDRESS_OFFSET, server.AddressPort.Address, server.AddressPort.Port)
+	fmt.Printf("SERVER START: Current time: %s | Offset is %fs \n", server.getTime().Format("15:04:05.000"), server.TimestampOffset.Seconds())
 	fmt.Println("Clients may now connect")
 
 	// Wait forever
