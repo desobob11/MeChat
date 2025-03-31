@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"math/rand"
 	"net"
 	"net/rpc"
 	"os"
@@ -22,6 +23,11 @@ import (
 type ReplicaAddress struct {
 	Address string
 	Port    uint16
+}
+
+type LogStatus struct {
+	LogIndex      int
+	LastTimestamp time.Time
 }
 
 var ADDRESS_OFFSET uint32
@@ -197,6 +203,19 @@ func (s *Server) getTime() time.Time {
 	return time.Now().Add(s.TimestampOffset)
 }
 
+func (r *ReplicationHandler) GetLogStatus(dummy int, status *LogStatus) error {
+	r.mutex.Lock()
+	defer r.mutex.Unlock()
+
+	// Here we use the current log index and the server's current time
+	// as a proxy for the timestamp of the latest log entry.
+	// Alternatively, if you maintain a LastLogTimestamp field in your server,
+	// you can use that instead.
+	status.LogIndex = r.server.LogIndex
+	status.LastTimestamp = r.server.getTime() // or r.server.LastLogTimestamp if you store it
+	return nil
+}
+
 // Method to append an entry to the log
 func (s *Server) AppendToLog(entry LogEntry) (LogEntry, error) {
 	s.LogMutex.Lock()
@@ -225,6 +244,61 @@ func (s *Server) AppendToLog(entry LogEntry) (LogEntry, error) {
 
 func IsAddressSelf(addr1, addr2 ReplicaAddress) bool {
 	return fmt.Sprintf("%s:%d", addr1.Address, addr1.Port) == fmt.Sprintf("%s:%d", addr2.Address, addr2.Port)
+}
+
+func (s *Server) ConsistencyCheckLoop() {
+	for {
+		// Randomize interval between 150ms and 300ms
+		interval := time.Duration(150+rand.Intn(150)) * time.Millisecond
+		time.Sleep(interval)
+
+		localIndex := s.LogIndex
+
+		for _, addr := range s.BackupNodes {
+			// Skip checking self
+			if IsAddressSelf(s.AddressPort, addr) {
+				continue
+			}
+
+			rpcAddr := net.JoinHostPort(addr.Address, fmt.Sprintf("%d", addr.Port))
+			caller, err := net.DialTimeout("tcp", rpcAddr, 1*time.Second)
+			if err != nil {
+				log.Printf("Node %d: Cannot reach %s: %v", s.PID, rpcAddr, err)
+				continue
+			}
+
+			var status LogStatus
+			client := rpc.NewClient(caller)
+			err = client.Call("ReplicationHandler.GetLogStatus", 0, &status)
+			client.Close()
+			if err != nil {
+				log.Printf("Node %d: Error fetching log status from %s: %v", s.PID, rpcAddr, err)
+				continue
+			}
+
+			if status.LogIndex < localIndex {
+				log.Printf("Node %d: Node %s is behind (local: %d, remote: %d). Initiating catch-up.", s.PID, rpcAddr, localIndex, status.LogIndex)
+				// Only the leader should trigger catch-up replication.
+				if s.IsLeader {
+					// Use the existing catch-up mechanism.
+					// You may call the CatchupReplica RPC method.
+					var resp IDNumber
+					caller, err := net.DialTimeout("tcp", rpcAddr, 1*time.Second)
+					if err != nil {
+						log.Printf("Leader: Unable to connect to %s for catch-up: %v", rpcAddr, err)
+						continue
+					}
+					client = rpc.NewClient(caller)
+					// Here we assume that the remote node will catch up based on our current logs.
+					err = client.Call("ReplicationHandler.CatchupReplica", IDNumber{ID: s.PID}, &resp)
+					client.Close()
+					if err != nil {
+						log.Printf("Leader: Error triggering catch-up for %s: %v", rpcAddr, err)
+					}
+				}
+			}
+		}
+	}
 }
 
 // Method to replicate to backup nodes
@@ -813,6 +887,11 @@ func main() {
 	fmt.Printf("Replica %d running at %s:%d\n", ADDRESS_OFFSET, server.AddressPort.Address, server.AddressPort.Port)
 	fmt.Printf("SERVER START: Current time: %s | Offset is %fs \n", server.getTime().Format("15:04:05.000"), server.TimestampOffset.Seconds())
 	fmt.Println("Clients may now connect")
+
+	// leader starts the ConsistencyCheckLoop
+	if server.IsLeader {
+		go server.ConsistencyCheckLoop()
+	}
 
 	// Wait forever
 	select {}
