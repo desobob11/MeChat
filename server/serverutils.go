@@ -67,6 +67,12 @@ type RPCResponse struct {
 	Message string
 }
 
+type AddContactMessage struct {
+    UserId int
+    ContactId int
+}
+
+
 // Debug Function
 type NodeInfo struct {
 	NodeID   int  `json:"node_id"`
@@ -262,12 +268,106 @@ func (t *MessageHandler) Login(message *LoginMessage, user_profile *UserProfile)
 	}
 	user_row.Close()
 
-	fmt.Println("User profile fetched")
-	fmt.Println(user_profile.Email)
-	fmt.Println(user_profile.Descr)
-	fmt.Println(user_profile.Firstname)
+		
+
+//	fmt.Println("User profile fetched")
+
 	return nil
 }
+
+func (t *MessageHandler) AddContact(message *AddContactMessage, response *AddContactMessage) error {
+	t.mutex.Lock()
+	defer t.mutex.Unlock()
+
+	check := `SELECT * FROM contacts WHERE userid=? AND contactid=?`
+
+
+	check_one, err1 := t.server.DB.Query(check, message.ContactId, message.UserId)
+	check_two, err2 := t.server.DB.Query(check, message.UserId, message.ContactId)
+
+	if err1 != nil || err2 != nil {
+		fmt.Println("Error querying contact")
+		check_one.Close()
+		check_two.Close()
+		return fmt.Errorf("error querying contact")
+	}
+
+	if check_one.Next() || check_two.Next() {
+		check_one.Close()
+		check_two.Close()
+		fmt.Println("Contact already exists")
+		return fmt.Errorf("contact already exists")
+	}
+
+	check_one.Close()
+	check_two.Close()
+
+	tx, err := t.server.DB.Begin()
+    if err != nil {
+        fmt.Println("Error beginning transaction: ", err)
+        return fmt.Errorf("error beginning transaction: ")
+    }
+
+	script := `INSERT INTO contacts
+				(userid, contactid) VALUES (?, ?)`
+
+	_, err1 = tx.Exec(script, message.UserId, message.ContactId);
+	_, err2 = tx.Exec(script, message.ContactId, message.UserId);
+	fmt.Printf("%d    %d\n", message.UserId, message.ContactId)
+	if err1 != nil || err2 != nil {
+		fmt.Println("Error creating contact")
+		tx.Rollback()
+		return fmt.Errorf("error creating contact")
+	}
+
+	err = tx.Commit()
+	if err != nil {
+        fmt.Println("Error committing: ", err)
+        return fmt.Errorf("error committing: ")
+    }
+
+	// Create a log entry without index
+	entry := LogEntry{
+		SQL: script,
+		Args: []any{
+			message.UserId,
+			message.ContactId,
+		},
+	}
+
+	// Append to log and get updated entry with proper index
+	updatedEntry, err := t.server.AppendToLog(entry)
+	if err != nil {
+		fmt.Printf("Error appending to log: %v", err)
+		// Continue despite error - we already applied locally
+	} else {
+		// Replicate the updated entry with proper index
+		go t.server.ReplicateToBackups(updatedEntry)
+	}
+
+	// need both versions
+	entry = LogEntry{
+		SQL: script,
+		Args: []any{
+			message.ContactId,
+			message.UserId,
+		},
+	}
+
+		// Append to log and get updated entry with proper index
+	updatedEntry, err = t.server.AppendToLog(entry)
+	if err != nil {
+		fmt.Printf("Error appending to log: %v", err)
+		// Continue despite error - we already applied locally
+	} else {
+		// Replicate the updated entry with proper index
+		go t.server.ReplicateToBackups(updatedEntry)
+	}
+
+
+	return nil
+}
+
 
 func (t *MessageHandler) GetContacts(message *UserProfile, contacts *Contacts) error {
 	t.mutex.Lock()
@@ -303,7 +403,7 @@ func (t *MessageHandler) GetContacts(message *UserProfile, contacts *Contacts) e
 	}
 	rows.Close()
 
-	fmt.Println("Contacts fetched")
+
 	return nil
 }
 
@@ -339,7 +439,7 @@ func (t *MessageHandler) GetAllUsers(message *UserProfile, contacts *Contacts) e
 	}
 	rows.Close()
 
-	fmt.Println("All users fetched")
+	//fmt.Println("All users fetched")
 	return nil
 }
 
@@ -379,7 +479,6 @@ func (t *MessageHandler) GetMessages(message *GetMessagesRequest, messages *Mess
 	}
 	rows.Close()
 
-	fmt.Println("Messages fetched")
 	return nil
 }
 

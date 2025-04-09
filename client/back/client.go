@@ -47,6 +47,11 @@ type RPCResponse struct {
 	Message string
 }
 
+type AddContactMessage struct {
+    UserId int
+    ContactId int
+}
+
 
 
 type CreateAccountMessage struct {
@@ -254,6 +259,34 @@ func CreateAccount(w http.ResponseWriter, req *http.Request) {
     }
  }
 
+ func AddContact(w http.ResponseWriter, req *http.Request) {
+    data := RequestToJson(req);
+
+
+
+    user, _ := data["UserId"].(float64)
+    contact, _ := data["ContactId"].(float64)
+    int_user := int(user)
+    int_contact := int(contact)
+
+    messageToBack := &AddContactMessage{
+     UserId:       int_user,
+     ContactId: int_contact,
+ }
+
+    var response AddContactMessage
+    resp := RemoteProcedureCall("MessageHandler.AddContact", messageToBack, &response)
+
+    if resp != nil  {
+     fmt.Println("Error adding contact: ", response);
+     w.WriteHeader(http.StatusBadRequest)
+    } else {
+        w.Header().Set("Content-Type", "application/json")
+        w.WriteHeader(http.StatusOK)
+    }
+        
+ }
+
 
 
 
@@ -380,6 +413,7 @@ func HTTPThread() {
     serv.HandleFunc("/getcontacts", GetContacts)
     serv.HandleFunc("/getmessages", GetMessages)
     serv.HandleFunc("/allusers", GetAllUsers)
+    serv.HandleFunc("/addcontact", AddContact)
     http.ListenAndServe("127.0.0.1:8090", cors.Default().Handler(serv))
 }
 

@@ -1,37 +1,62 @@
 import { useState, useEffect } from 'react'
-import { BACK_END_PORT, CONTACTS_ROUTE, ALL_USERS_ROUTE } from '../const'
+import { BACK_END_PORT, CONTACTS_ROUTE, ALL_USERS_ROUTE, ADD_CONTACT_ROUTE } from '../const'
 import { useGlobal } from '../globalContext';
 import { PlusIcon, XMarkIcon } from "@heroicons/react/24/outline";
 
 
 export const ChatContact = (props) => {
 
-
     return (
-        <div className="fixed inset-x-0">
-            <li key={props.email} className="flex justify-between gap-x-6 p-5 border-solid border-b-1 ">
-                <div className="flex min-w-0 gap-x-4">
+        <li key={props.email} className="flex justify-between gap-x-6 p-5 border-solid border-b-1 ">
+            <div className="flex min-w-0 gap-x-4">
 
-
-                    <div className="min-w-0 flex-auto">
-                        <p className="text-sm/6 font-semibold text-gray-900">{props.name}</p>
-                        <p className="mt-1 truncate text-xs/5 text-gray-500">{props.email}</p>
-                    </div>
+               
+                <div className="min-w-0 flex-auto">
+                    <p className="text-sm/6 font-semibold text-gray-900">{props.name}</p>
+                    <p className="mt-1 truncate text-xs/5 text-gray-500">{props.email}</p>
                 </div>
-                <div className="hidden shrink-0 sm:flex sm:flex-col sm:items-end">
-                    <p className="text-sm/6 text-gray-900">{props.role}</p>
-                </div>
-            </li>
-        </div>
+            </div>
+            <div className="hidden shrink-0 sm:flex sm:flex-col sm:items-end">
+                <p className="text-sm/6 text-gray-900">{props.role}</p>
+            </div>
+        </li>
     );
 }
 
 export const NameListItem = (props) => {
+
+    
+    const { userProfile, setUserProfile } = useGlobal()
+
+    const sendCreateContactMessage = () => {
+        var req_body = {
+            UserId: userProfile.UserId,
+            ContactId: props.UserId
+        }
+        const options = {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(req_body),
+        };
+        fetch(`http://127.0.0.1:${BACK_END_PORT}/${ADD_CONTACT_ROUTE}`, options)
+        .then(response => {
+            if (!response.ok) {
+                alert("Error adding friend. You may already have them as a friend. Or try again later")
+            }
+            else {
+                alert("Friend added!")
+            }
+     
+        })
+
+        props.refreshFunction();
+    }
+
     return (
-        <button className='w-full text-left hover:bg-gray-100 active:bg-white'>
+        <button onClick={sendCreateContactMessage} className='w-full text-left hover:bg-gray-100 active:bg-white'>
             <div>
                 <p className="grid grid-cols-1 text-gray-800 text-xl font-bold font-sans ">
-                    {props.Firstname} {props.Lastname}
+                    {props.UserId}. {props.Firstname} {props.Lastname}
                 </p>
                 <p className="paddingtext-gray-800 text-sm font-sans  ">
                     {props.Email}
@@ -58,7 +83,7 @@ export const NameList = (props) => {
             setUsersToDisplay([])
         }
         else {
-            setUsersToDisplay(allUsers.filter((user) => `${user.Firstname}${user.Lastname}${user.Email}`.includes(e.target.value)))
+            setUsersToDisplay(allUsers.filter((user) => `${user.Firstname}${user.Lastname}${user.Email}`.toLowerCase().includes(e.target.value.toLowerCase())))
         }
     }
 
@@ -71,8 +96,8 @@ export const NameList = (props) => {
                     Add
                 </p>
              
-                <button className="h-10 w-10 text-white bg-gradient-to-b from-red-400 to-red-500 rounded-full flex items-center justify-center">
-                    <XMarkIcon onClick={props.buttonAction} className="w-6 h-6" />
+                <button onClick={props.buttonAction} className="h-10 w-10 text-white bg-gradient-to-b from-red-400 to-red-500 rounded-full flex items-center justify-center">
+                    <XMarkIcon  className="w-6 h-6" />
                 </button>
                 <form onChange={handleInputChange} onSubmit={x => { }}>
                 <div class="grid grid-cols-2">
@@ -96,9 +121,11 @@ export const NameList = (props) => {
                     {usersToDisplay.map((item, index) => (
                         <NameListItem
                             key={index}
+                            refreshFunction={props.refreshFunction}
                             Firstname={item.Firstname}
                             Lastname={item.Lastname}
                             Email={item.Email}
+                            UserId={item.UserId}
                         />
                     ))}
                 
@@ -113,18 +140,6 @@ export const NameList = (props) => {
 
 }
 
-export const Items = [
-    { Firstname: "Des", Lastname: "Des", Email: "Email" },
-    { Firstname: "Des", Lastname: "Des", Email: "Email" },
-    { Firstname: "Des", Lastname: "Des", Email: "Email" },
-    { Firstname: "Des", Lastname: "Des", Email: "Email" },
-    { Firstname: "Des", Lastname: "Des", Email: "Email" },
-    { Firstname: "Des", Lastname: "Des", Email: "Email" },
-    { Firstname: "Des", Lastname: "Des", Email: "Email" },
-    { Firstname: "Des", Lastname: "Des", Email: "Email" },
-    { Firstname: "Des", Lastname: "Des", Email: "Email" }
-]
-
 
 
 export default function ChatList() {
@@ -132,7 +147,7 @@ export default function ChatList() {
     const { userProfile, setUserProfile } = useGlobal()
 
     const [contacts, setContacts] = useState(null)
-    const [nameListVisible, setNameListVisible] = useState(true);
+    const [nameListVisible, setNameListVisible] = useState(false);
     const { selectedContactId, setSelectedContactId } = useGlobal();
 
     const { allUsers, setAllUsers } = useGlobal();
@@ -201,26 +216,25 @@ export default function ChatList() {
 
 
 
+    // need to continuously check for use
     useEffect(() => {
-
-        if (contacts === null) {
+        const interval = setInterval(() => {
             GetContacts();
             getAllUsers();
-        }
-        console.log(contacts)
-
-    }, [contacts])
+        }, 1000); 
+        return () => clearInterval(interval);
+    }, []);
 
 
     return (
         <div className="w-2/4 h-4/4">
-            <NameList items={Items} nameListVisible={nameListVisible} buttonAction={closeNameList} />
+            <NameList refreshFunction={GetContacts} nameListVisible={nameListVisible} buttonAction={closeNameList} />
             <text className="paddingtext-gray-800 text-4xl font-sans font-bold ">
                 Chats
             </text>
           
-            <button className="flex items-center justify-center ml-2 mt-2 h-10 w-[25%] text-white bg-gradient-to-b from-blue-400 to-blue-500 rounded-3xl">
-                <PlusIcon onClick={setNameListVisible} className="w-6 h-6" />
+            <button onClick={setNameListVisible} className="flex items-center justify-center ml-2 mt-2 h-10 w-[25%] text-white bg-gradient-to-b from-blue-400 to-blue-500 rounded-3xl">
+                <PlusIcon  className="w-6 h-6" />
             </button>
 
             {contacts === null ? (
