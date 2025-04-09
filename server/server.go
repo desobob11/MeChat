@@ -263,7 +263,7 @@ func (s *Server) ConsistencyCheckLoop() {
 			rpcAddr := net.JoinHostPort(addr.Address, fmt.Sprintf("%d", addr.Port))
 			caller, err := net.DialTimeout("tcp", rpcAddr, 1*time.Second)
 			if err != nil {
-				log.Printf("Node %d: Cannot reach %s: %v", s.PID, rpcAddr, err)
+				// log.Printf("Node %d: Cannot reach %s: %v", s.PID, rpcAddr, err) ACORE
 				continue
 			}
 
@@ -309,7 +309,7 @@ func (s *Server) ReplicateToBackups(entry LogEntry) {
 
 	reqs, err := ReadAllEntires(s)
 	if err != nil {
-		fmt.Printf("Error: %s", err)
+		//fmt.Printf("Error: %s", err) ACORE
 	}
 
 	reqs = append(reqs, entry) // add entry to list of messages we need to send
@@ -402,7 +402,7 @@ func ReadAllEntires(server *Server) ([]LogEntry, error) {
 	logFiles := []LogEntry{}
 	filenames, err := os.ReadDir(server.LogDir)
 	if err != nil {
-		fmt.Printf("Error: %s", err)
+		//fmt.Printf("Error: %s", err) ACORE
 		return logFiles, err
 	}
 
@@ -549,10 +549,10 @@ func (r *ReplicationHandler) BullyElection(msg *BullyMessage, resp *ReplicationR
 func (r *ReplicationHandler) BullyAlgorithmThread() {
 	for {
 		for !r.BullyFailureDetector() { // check for leader every five seconds
-			fmt.Printf("Leader %d is online... \n", r.server.LeaderID)
-			fmt.Printf("Current time: %s | Offset is %fs \n", r.server.getTime().Format("15:04:05.000"), r.server.TimestampOffset.Seconds())
+			//fmt.Printf("Leader %d is online... \n", r.server.LeaderID) ACORE
+			 // fmt.Printf("Current time: %s | Offset is %fs \n", r.server.getTime().Format("15:04:05.000"), r.server.TimestampOffset.Seconds()) ACORE
 
-			time.Sleep(5 * time.Second)
+			time.Sleep(1 * time.Second)
 		}
 
 		// leader is dead
@@ -605,7 +605,7 @@ func (r *ReplicationHandler) SyncTime() error {
 	}
 
 	if len(rpcClients) == 0 {
-		fmt.Printf("Error: No backup nodes available for time sync\n")
+		//fmt.Printf("Error: No backup nodes available for time sync\n") ACORE
 		return nil
 	}
 	fmt.Printf("Syncing time with %d nodes\n", len(rpcClients))
@@ -722,7 +722,11 @@ func (r *ReplicationHandler) BullyFailureDetector() bool {
 
 	leader_addr := r.server.BackupNodes[r.server.LeaderID]
 	addr_string := net.JoinHostPort(leader_addr.Address, fmt.Sprintf("%d", leader_addr.Port))
-	caller, err := net.DialTimeout("tcp", addr_string, 5*time.Second) // need a timeout here, else this hangs if backup not reachable
+	
+	t_trans := 50 * time.Millisecond;
+	t_proc := 10 * time.Millisecond;
+	t := (2 * t_trans) + t_proc
+	caller, err := net.DialTimeout("tcp", addr_string, t) // need a timeout here, else this hangs if backup not reachable
 	if err != nil {
 		fmt.Printf("Leader down: %s\n", err)
 		return true

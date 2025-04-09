@@ -3,6 +3,7 @@ package main
 import (
 	// "bufio"
 	"fmt"
+
 	"strconv"
 
 	// "strconv"
@@ -214,8 +215,10 @@ func (t *MessageHandler) Login(message *LoginMessage, user_profile *UserProfile)
 	t.mutex.Lock()
 	defer t.mutex.Unlock()
 
+
 	pass_check := `SELECT [password] FROM users WHERE email = ?`
 	pass_row, err := t.server.DB.Query(pass_check, message.Email)
+
 	if err != nil {
 		fmt.Println("Error checking password")
 		return err
@@ -301,6 +304,42 @@ func (t *MessageHandler) GetContacts(message *UserProfile, contacts *Contacts) e
 	rows.Close()
 
 	fmt.Println("Contacts fetched")
+	return nil
+}
+
+
+func (t *MessageHandler) GetAllUsers(message *UserProfile, contacts *Contacts) error {
+	t.mutex.Lock()
+	defer t.mutex.Unlock()
+
+	query := `SELECT
+                userid,
+                email,
+                firstname,
+                lastname,
+                descr
+				FROM users`
+
+	rows, err := t.server.DB.Query(query)
+	if err != nil {
+		fmt.Println(err)
+		return err
+	}
+
+	contacts.ContactList = []UserProfile{}
+	for rows.Next() {
+		var contact UserProfile
+		err = rows.Scan(&contact.UserId, &contact.Email, &contact.Firstname, &contact.Lastname, &contact.Descr)
+		if err != nil {
+			fmt.Println(err)
+			rows.Close()
+			return err
+		}
+		contacts.ContactList = append(contacts.ContactList, contact)
+	}
+	rows.Close()
+
+	fmt.Println("All users fetched")
 	return nil
 }
 

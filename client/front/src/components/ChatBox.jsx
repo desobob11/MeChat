@@ -1,6 +1,6 @@
 import { useEffect, useState, useRef, forwardRef } from "react";
 import { Description, Field, Label, Textarea } from '@headlessui/react'
-import { ArrowUpRightIcon } from "@heroicons/react/24/outline";
+import { ArrowUpRightIcon, PlusIcon } from "@heroicons/react/24/outline";
 import {BACK_END_PORT, INCOMING_ROUTE, MESSAGES_ROUTE} from '../const';
 import clsx from 'clsx'
 import { GlobalProvider, useGlobal } from "../globalContext";
