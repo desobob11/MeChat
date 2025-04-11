@@ -47,6 +47,13 @@ type RPCResponse struct {
 	Message string
 }
 
+type AddContactMessage struct {
+    UserId int
+    ContactId int
+}
+
+
+
 type CreateAccountMessage struct {
     Email string
     Password string
@@ -173,36 +180,19 @@ func ConfirmLeader() bool {
 
 func RemoteProcedureCall(funcName string, args any, reply any) error {
 
-    // check connection
-   // _, err := net.DialTimeout("tcp", fmt.Sprintf("%s:%d", ACTIVE_REPLICA.Address, ACTIVE_REPLICA.Port), 5 * time.Second)
-    
+
    leaderFound := ConfirmLeader()
    for !leaderFound {
        leaderFound = ConfirmLeader()       // sets rpc_client
    }
    fmt.Printf("Leader is now: %s:%d\n", ACTIVE_REPLICA.Address, ACTIVE_REPLICA.Port)
-   rpc_client.Call(funcName, args, reply)      // check for highest leader everytime
+   err := rpc_client.Call(funcName, args, reply)      // check for highest leader everytime
 
 
 
-    // if could not connect, need to find new lead
-    /*
-    if err != nil {
-        fmt.Println("Leader is down, will find new leader")
-        leaderFound := ConfirmLeader()
-        for !leaderFound {
-            leaderFound = ConfirmLeader()       // sets rpc_client
-        }
-        time.Sleep(3 * time.Second)
-        fmt.Printf("Leader: %s:%d\n", ACTIVE_REPLICA.Address, ACTIVE_REPLICA.Port)
-        rpc_client.Call(funcName, args, reply)
-    } else {
-        rpc_client.Call(funcName, args, reply)      // all good
-    }
-        */
 
 
-    return nil
+    return err
     
 }
 
@@ -269,6 +259,34 @@ func CreateAccount(w http.ResponseWriter, req *http.Request) {
     }
  }
 
+ func AddContact(w http.ResponseWriter, req *http.Request) {
+    data := RequestToJson(req);
+
+
+
+    user, _ := data["UserId"].(float64)
+    contact, _ := data["ContactId"].(float64)
+    int_user := int(user)
+    int_contact := int(contact)
+
+    messageToBack := &AddContactMessage{
+     UserId:       int_user,
+     ContactId: int_contact,
+ }
+
+    var response AddContactMessage
+    resp := RemoteProcedureCall("MessageHandler.AddContact", messageToBack, &response)
+
+    if resp != nil  {
+     fmt.Println("Error adding contact: ", response);
+     w.WriteHeader(http.StatusBadRequest)
+    } else {
+        w.Header().Set("Content-Type", "application/json")
+        w.WriteHeader(http.StatusOK)
+    }
+        
+ }
+
 
 
 
@@ -289,10 +307,12 @@ func CreateAccount(w http.ResponseWriter, req *http.Request) {
 
 
     var response UserProfile
-    resp := RemoteProcedureCall("MessageHandler.Login", messageToBack, &response)
+    err := RemoteProcedureCall("MessageHandler.Login", messageToBack, &response)
+    fmt.Println(err)
+    fmt.Println(response.UserId)
 
 
-    if resp != nil  {
+    if err != nil  {
      fmt.Println("Error response from create user RPC ", response);
      w.WriteHeader(http.StatusBadRequest)
     } else {
@@ -322,6 +342,29 @@ func CreateAccount(w http.ResponseWriter, req *http.Request) {
 
     var response Contacts
     resp := RemoteProcedureCall("MessageHandler.GetContacts", messageToBack, &response)
+
+    if resp != nil  {
+     fmt.Println(response);
+     w.WriteHeader(http.StatusBadRequest)
+    } else {
+        w.Header().Set("Content-Type", "application/json")
+        w.WriteHeader(http.StatusOK)
+        json.NewEncoder(w).Encode(response.ContactList)
+    }
+ }
+
+ func GetAllUsers(w http.ResponseWriter, req *http.Request) {
+    data := RequestToJson(req);
+
+    userid := int(data["UserId"].(float64))
+
+
+    messageToBack := &UserProfile{
+     UserId:       userid,
+    }
+
+    var response Contacts
+    resp := RemoteProcedureCall("MessageHandler.GetAllUsers", messageToBack, &response)
 
     if resp != nil  {
      fmt.Println(response);
@@ -369,6 +412,8 @@ func HTTPThread() {
     serv.HandleFunc("/login", Login)
     serv.HandleFunc("/getcontacts", GetContacts)
     serv.HandleFunc("/getmessages", GetMessages)
+    serv.HandleFunc("/allusers", GetAllUsers)
+    serv.HandleFunc("/addcontact", AddContact)
     http.ListenAndServe("127.0.0.1:8090", cors.Default().Handler(serv))
 }
 

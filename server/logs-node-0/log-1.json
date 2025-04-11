@@ -2,11 +2,11 @@
   "index": 1,
   "sql": "INSERT INTO messages (\n\t\t[from_userid], \n\t\t[to_userid], \n\t\t[message], \n\t\t[timestamp], \n\t\t[acked]) \n\t\tVALUES (?, ?, ?, ?, ?);",
   "args": [
+    23,
     1,
-    2,
-    "Hello again!",
-    "19:37",
+    "hello",
+    "15:26",
     1
   ],
-  "timestamp": "2025-03-23T19:37:40.211974394-06:00"
+  "timestamp": "2025-04-11T15:26:30.8896-06:00"
 }
