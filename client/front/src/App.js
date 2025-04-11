@@ -13,10 +13,14 @@ import LoginPage from './pages/LoginPage.jsx';
 import RegisterPage from './pages/RegisterPage.jsx';
 import { GlobalProvider } from './globalContext.js';
 
+/**
+ * Webapp entry
+ * 
+ * @returns 
+ * 
+ */
 
-export 
-
-function App() {
+export function App() {
   return (
     <GlobalProvider>
     <div>

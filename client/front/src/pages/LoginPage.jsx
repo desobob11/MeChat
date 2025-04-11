@@ -7,7 +7,19 @@ import { useEffect, useState } from 'react';
 import { LOGIN_ROUTE, BACK_END_PORT } from '../const';
 import { GlobalProvider, useGlobal } from '../globalContext';
 
+/**
+ * Login Page Component
+ * 
+ * Based on Tailwind templates:
+ * https://tailwindcss.com/plus/ui-blocks/application-ui/forms/sign-in-forms
+ * 
+ * 
+ */
 
+/**
+ * Format of login message sent to backend
+ * 
+ */
 class LoginMessage {
   constructor(pass, email) {
     this.email = email;
@@ -15,6 +27,12 @@ class LoginMessage {
   }
 }
 
+/**
+ * Logic component of page
+ * 
+ * @returns 
+ * 
+ */
 export default function LoginPage() {
   const {userProfile, setUserProfile} = useGlobal()
     const [password, setPassword] = useState("")
@@ -22,14 +40,17 @@ export default function LoginPage() {
     
     const navigate = useNavigate()
 
-
       useEffect(() => {
-        if (Object.keys(userProfile).length > 1) {
+        if (Object.keys(userProfile).length > 1) {  // if we logged in successfully, route to home page
           navigate("/home")
         }
       }, [userProfile])
     
-
+    
+      /**
+       * Send username and password to back, await validation and response with user profile
+       * @param {*} _loginMsg 
+       */
  const sendInputToBack = (_loginMsg) => {
         var req_body = {
             Email: _loginMsg.email,

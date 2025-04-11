@@ -4,14 +4,21 @@ import { GlobalProvider, useGlobal } from '../globalContext'
 import { useNavigate } from 'react-router-dom'
 import { useEffect } from 'react'
 
+
+/**
+ * Navbar Component
+ * 
+ * Based on Tailwind templates:
+ * https://tailwindcss.com/plus/ui-blocks/application-ui/navigation/navbars
+ * 
+ * 
+ */
 const user = {
 
 }
 const navigation = [
 
-
   { name: 'Home', href: '#', current: true },
-
 ]
 
 
@@ -33,8 +40,6 @@ export default function Navbar() {
   ]
 
   
-
-
 
   return (
     <>

@@ -3,9 +3,20 @@ import { BACK_END_PORT, CONTACTS_ROUTE, ALL_USERS_ROUTE, ADD_CONTACT_ROUTE } fro
 import { useGlobal } from '../globalContext';
 import { PlusIcon, XMarkIcon } from "@heroicons/react/24/outline";
 
+/**
+ * ChatList React component
+ * 
+ * Manages scrollable contact view on left side of home screen
+ * 
+ * 
+ */
 
+/**
+ *  ChatContact card, item type in list on left side of screen
+ * @param {*} props 
+ * @returns 
+ */
 export const ChatContact = (props) => {
-
     return (
         <li key={props.email} className="flex justify-between gap-x-6 p-5 border-solid border-b-1 ">
             <div className="flex min-w-0 gap-x-4">
@@ -23,11 +34,19 @@ export const ChatContact = (props) => {
     );
 }
 
+
+/**
+ * How a user's profile appears when adding contacts
+ * @param {*} props 
+ * @returns 
+ */
 export const NameListItem = (props) => {
-
-
     const { userProfile, setUserProfile } = useGlobal()
 
+    /**
+     * Clicking user's name adds contact
+     * 
+     */
     const sendCreateContactMessage = () => {
         var req_body = {
             UserId: userProfile.UserId,
@@ -38,6 +57,8 @@ export const NameListItem = (props) => {
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(req_body),
         };
+
+        // HTTP to back as usual
         fetch(`http://127.0.0.1:${BACK_END_PORT}/${ADD_CONTACT_ROUTE}`, options)
             .then(response => {
                 if (!response.ok) {
@@ -68,15 +89,18 @@ export const NameListItem = (props) => {
 
 }
 
+/**
+ * Container, list of available contacts to add, item type is NameListItem
+ * @param {*} props 
+ * @returns 
+ */
 export const NameList = (props) => {
 
-    const { allUsers, setAllUsers } = useGlobal();
-    const [usersToDisplay, setUsersToDisplay] = useState([])
+    const { allUsers, setAllUsers } = useGlobal();      // all users in system (proof of concept, pulled at page load)
+    const [usersToDisplay, setUsersToDisplay] = useState([])   
     const [currentInput, setCurrentInput] = useState("");
-    // useEffect = (() => {
-    //
-    // }, [allUsers])
 
+    // filter names in list based on input text content
     const handleInputChange = (e) => {
         setCurrentInput(e.target.value);
         if (e.target.value === "") {
@@ -119,6 +143,7 @@ export const NameList = (props) => {
 
 
                 {usersToDisplay.map((item, index) => (
+                    // filtered list of NameListItems
                     <NameListItem
                         key={index}
                         refreshFunction={props.refreshFunction}
@@ -141,22 +166,26 @@ export const NameList = (props) => {
 }
 
 
-
+/**
+ * Main component for chat/contact list on left side of screen
+ * 
+ * @returns 
+ * 
+ */
 export default function ChatList() {
 
-    const { userProfile, setUserProfile } = useGlobal()
-
-    const [contacts, setContacts] = useState(null);
-    const [searchContacts, setSearchContacts] = useState([]);
-    const [nameListVisible, setNameListVisible] = useState(false);
-    const { selectedContactId, setSelectedContactId } = useGlobal();
-    const [chatSearchText, setChatSearchText] = useState("")
-    const { allUsers, setAllUsers } = useGlobal();
+    const { userProfile, setUserProfile } = useGlobal() // current user profile
+    const [contacts, setContacts] = useState(null); // user's contacts
+    const [searchContacts, setSearchContacts] = useState([]);   // contacts filtered based on text input
+    const [nameListVisible, setNameListVisible] = useState(false);  // are we adding a contact?
+    const { selectedContactId, setSelectedContactId } = useGlobal();    // selected chat id
+    const [chatSearchText, setChatSearchText] = useState("")    // text box, searching through chats
+    const { allUsers, setAllUsers } = useGlobal();  // all users from backend (Proof of concept)
 
     
     // need to continuously check for use
     useEffect(() => {
-        const interval = setInterval(() => {
+        const interval = setInterval(() => {    // ask for latest users and contacts silently every second
             GetContacts();
             getAllUsers();
         }, 1000);
@@ -171,14 +200,14 @@ export default function ChatList() {
     }
 
 
-    const openNameList = () => {
-        setNameListVisible(true);
-    }
-
     const closeNameList = () => {
         setNameListVisible(false);
     }
 
+    /**
+     * Request all users from backend
+     * 
+     */
     const getAllUsers = () => {
         var req_body = {
             UserId: userProfile.UserId,
@@ -205,6 +234,10 @@ export default function ChatList() {
 
     }
 
+    /**
+     * get user's registered contacts from backend
+     * 
+     */
     const GetContacts = () => {
         var req_body = {
             UserId: userProfile.UserId,

@@ -4,11 +4,16 @@ import Navbar from '../components/Navbar';
 import ChatBox from '../components/ChatBox';
 import { GlobalProvider, useGlobal } from '../globalContext';
 
-
+/**
+ * 
+ * Main homepage component
+ * 
+ * @returns 
+ */
 export default function HomePage() {
     const {userProfile} = useGlobal()
 
-    const loggedin = () => {
+    const loggedin = () => {    // if loggedin, show screen w navbar, chatlist, and chatbox
         return (
 
         
@@ -23,7 +28,7 @@ export default function HomePage() {
         );
     }
 
-    const loggedout = () => {
+    const loggedout = () => {       // else not loggedin, error 404
         return (
         <div>
             <p>
