@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
-	"math/rand"
 	"net"
 	"net/rpc"
 	"os"
@@ -26,8 +25,7 @@ type ReplicaAddress struct {
 }
 
 type LogStatus struct {
-	LogIndex      int
-	LastTimestamp time.Time
+	LogIndex int
 }
 
 var ADDRESS_OFFSET uint32
@@ -207,12 +205,7 @@ func (r *ReplicationHandler) GetLogStatus(dummy int, status *LogStatus) error {
 	r.mutex.Lock()
 	defer r.mutex.Unlock()
 
-	// Here we use the current log index and the server's current time
-	// as a proxy for the timestamp of the latest log entry.
-	// Alternatively, if you maintain a LastLogTimestamp field in your server,
-	// you can use that instead.
 	status.LogIndex = r.server.LogIndex
-	status.LastTimestamp = r.server.getTime() // or r.server.LastLogTimestamp if you store it
 	return nil
 }
 
@@ -246,61 +239,6 @@ func IsAddressSelf(addr1, addr2 ReplicaAddress) bool {
 	return fmt.Sprintf("%s:%d", addr1.Address, addr1.Port) == fmt.Sprintf("%s:%d", addr2.Address, addr2.Port)
 }
 
-func (s *Server) ConsistencyCheckLoop() {
-	for {
-		// Randomize interval between 150ms and 300ms
-		interval := time.Duration(150+rand.Intn(150)) * time.Millisecond
-		time.Sleep(interval)
-
-		localIndex := s.LogIndex
-
-		for _, addr := range s.BackupNodes {
-			// Skip checking self
-			if IsAddressSelf(s.AddressPort, addr) {
-				continue
-			}
-
-			rpcAddr := net.JoinHostPort(addr.Address, fmt.Sprintf("%d", addr.Port))
-			caller, err := net.DialTimeout("tcp", rpcAddr, 1*time.Second)
-			if err != nil {
-				// log.Printf("Node %d: Cannot reach %s: %v", s.PID, rpcAddr, err) ACORE
-				continue
-			}
-
-			var status LogStatus
-			client := rpc.NewClient(caller)
-			err = client.Call("ReplicationHandler.GetLogStatus", 0, &status)
-			client.Close()
-			if err != nil {
-				log.Printf("Node %d: Error fetching log status from %s: %v", s.PID, rpcAddr, err)
-				continue
-			}
-
-			if status.LogIndex < localIndex {
-				log.Printf("Node %d: Node %s is behind (local: %d, remote: %d). Initiating catch-up.", s.PID, rpcAddr, localIndex, status.LogIndex)
-				// Only the leader should trigger catch-up replication.
-				if s.IsLeader {
-					// Use the existing catch-up mechanism.
-					// You may call the CatchupReplica RPC method.
-					var resp IDNumber
-					caller, err := net.DialTimeout("tcp", rpcAddr, 1*time.Second)
-					if err != nil {
-						log.Printf("Leader: Unable to connect to %s for catch-up: %v", rpcAddr, err)
-						continue
-					}
-					client = rpc.NewClient(caller)
-					// Here we assume that the remote node will catch up based on our current logs.
-					err = client.Call("ReplicationHandler.CatchupReplica", IDNumber{ID: s.PID}, &resp)
-					client.Close()
-					if err != nil {
-						log.Printf("Leader: Error triggering catch-up for %s: %v", rpcAddr, err)
-					}
-				}
-			}
-		}
-	}
-}
-
 // Method to replicate to backup nodes
 func (s *Server) ReplicateToBackups(entry LogEntry) {
 	if !s.IsLeader || len(s.BackupNodes) == 0 {
@@ -309,7 +247,7 @@ func (s *Server) ReplicateToBackups(entry LogEntry) {
 
 	reqs, err := ReadAllEntires(s)
 	if err != nil {
-		//fmt.Printf("Error: %s", err) ACORE
+		fmt.Printf("Error: %s", err)
 	}
 
 	reqs = append(reqs, entry) // add entry to list of messages we need to send
@@ -402,7 +340,7 @@ func ReadAllEntires(server *Server) ([]LogEntry, error) {
 	logFiles := []LogEntry{}
 	filenames, err := os.ReadDir(server.LogDir)
 	if err != nil {
-		//fmt.Printf("Error: %s", err) ACORE
+		fmt.Printf("Error: %s", err)
 		return logFiles, err
 	}
 
@@ -549,10 +487,10 @@ func (r *ReplicationHandler) BullyElection(msg *BullyMessage, resp *ReplicationR
 func (r *ReplicationHandler) BullyAlgorithmThread() {
 	for {
 		for !r.BullyFailureDetector() { // check for leader every five seconds
-			//fmt.Printf("Leader %d is online... \n", r.server.LeaderID) ACORE
-			 // fmt.Printf("Current time: %s | Offset is %fs \n", r.server.getTime().Format("15:04:05.000"), r.server.TimestampOffset.Seconds()) ACORE
+			fmt.Printf("Leader %d is online... \n", r.server.LeaderID)
+			fmt.Printf("Current time: %s | Offset is %fs \n", r.server.getTime().Format("15:04:05.000"), r.server.TimestampOffset.Seconds())
 
-			time.Sleep(1 * time.Second)
+			time.Sleep(5 * time.Second)
 		}
 
 		// leader is dead
@@ -605,7 +543,7 @@ func (r *ReplicationHandler) SyncTime() error {
 	}
 
 	if len(rpcClients) == 0 {
-		//fmt.Printf("Error: No backup nodes available for time sync\n") ACORE
+		fmt.Printf("Error: No backup nodes available for time sync\n")
 		return nil
 	}
 	fmt.Printf("Syncing time with %d nodes\n", len(rpcClients))
@@ -714,18 +652,141 @@ func (r *ReplicationHandler) InitiateElection() bool {
 	return false
 }
 
+func (r *ReplicationHandler) SyncLogs() error {
+	localIndex := r.server.LogIndex
+
+	rpcClients := make([]*rpc.Client, 0, len(r.server.BackupNodes))
+
+	for _, addr := range r.server.BackupNodes {
+		if IsAddressSelf(r.server.AddressPort, addr) { // skip self
+			continue
+		}
+
+		rpcAddr := net.JoinHostPort(addr.Address, fmt.Sprintf("%d", addr.Port))
+		caller, err := net.DialTimeout("tcp", rpcAddr, 1*time.Second)
+		if err != nil {
+			// log.Printf("Node %d: Cannot reach %s: %s", r.server.PID, rpcAddr, err)
+			continue
+		}
+		rpcClients = append(rpcClients, rpc.NewClient(caller))
+	}
+
+	if len(rpcClients) == 0 {
+		fmt.Printf("Error: No backup nodes available for log  sync\n")
+		return nil
+	}
+
+	for i, client := range rpcClients {
+		var status LogStatus
+		err := client.Call("ReplicationHandler.GetLogStatus", 0, &status)
+
+		if err != nil {
+			fmt.Printf("Error: %s", err)
+			continue
+		}
+
+		// client.Close()?
+
+		if status.LogIndex < localIndex {
+			fmt.Printf("Telling node %d to update its logs\n", i)
+
+			var resp IDNumber
+
+			if err := r.CatchupReplica(IDNumber{ID: i}, &resp); err != nil {
+				fmt.Printf("Replica %d: Error during CatchupReplica: %v\n", i, err)
+				continue
+			}
+
+			if resp.ID == -1 {
+				fmt.Printf("Node %d: Logs successfully caught up\n", i)
+			} else {
+				fmt.Printf("Node %d: Failed to catch up logs\n", i)
+			}
+		} else if status.LogIndex > localIndex {
+			fmt.Printf("Replica %d has a higher log index (%d vs leader %d); replacing logs...\n", i, status.LogIndex, localIndex)
+
+			var eraseResp ReplicationResponse
+
+			// erase logs
+			if err := client.Call("ReplicationHandler.EraseLogsFromDir", 0, &eraseResp); err != nil {
+				fmt.Printf("Replica %d: Error calling EraseLogsFromDir: %v\n", i, err)
+				continue
+			}
+
+			// make sure erase was successful
+			if !eraseResp.Success {
+				fmt.Printf("Replica %d: Failed to erase logs: %s\n", i, eraseResp.Message)
+				continue
+			}
+
+			fmt.Printf("Replica %d: Logs erased successfully.\n", i)
+
+			var catchupResp IDNumber
+
+			if err := r.CatchupReplica(IDNumber{ID: i}, &catchupResp); err != nil {
+				fmt.Printf("Replica %d: Error during CatchupReplica: %v\n", i, err)
+				continue
+			}
+
+			if catchupResp.ID == -1 {
+				fmt.Printf("Node %d: Logs successfully replaced.\n", i)
+			} else {
+				fmt.Printf("Node %d: CatchupReplica did not complete as expected (returned %d).\n", i, catchupResp.ID)
+			}
+		} else {
+			fmt.Printf("Node %d is already up to date\n", i)
+		}
+
+	}
+
+	return nil
+}
+
+func (r *ReplicationHandler) EraseLogsFromDir(_args int, resp *ReplicationResponse) error {
+
+	// Leader should never delete their logs only replicas
+	if r.server.PID == r.server.LeaderID {
+		resp.Success = false
+		resp.Message = "Leader cannot delete logs"
+		return nil
+	}
+
+	logDir := r.server.LogDir
+
+	//Delete the logDir which should remove all the replicas logs
+	if err := os.RemoveAll(logDir); err != nil {
+		resp.Success = false
+		resp.Message = fmt.Sprintf("Error deleting log directory: %v", err)
+		return err
+	}
+
+	// Recreate the log directory, don't need to check if it exists as we just deleted it
+	if err := os.MkdirAll(logDir, 0755); err != nil {
+		resp.Success = false
+		resp.Message = fmt.Sprintf("error creating log directory: %v", err)
+		return err
+	}
+
+	r.server.LogIndex = 0 // Reset log index after deletion
+
+	resp.Success = true
+	return nil
+}
+
 func (r *ReplicationHandler) BullyFailureDetector() bool {
 	if r.server.PID == r.server.LeaderID {
-		r.SyncTime() // Leader can do a time sync here instead of detecting leader failure
+		// Leader can do a time and log sync here instead of detecting leader failure
+		r.SyncTime()
+		r.SyncLogs()
 		return false // leader can't detect its own failures, return false
 	}
 
 	leader_addr := r.server.BackupNodes[r.server.LeaderID]
 	addr_string := net.JoinHostPort(leader_addr.Address, fmt.Sprintf("%d", leader_addr.Port))
-	
 	t_trans := 50 * time.Millisecond;
 	t_proc := 10 * time.Millisecond;
 	t := (2 * t_trans) + t_proc
+
 	caller, err := net.DialTimeout("tcp", addr_string, t) // need a timeout here, else this hangs if backup not reachable
 	if err != nil {
 		fmt.Printf("Leader down: %s\n", err)
@@ -891,11 +952,6 @@ func main() {
 	fmt.Printf("Replica %d running at %s:%d\n", ADDRESS_OFFSET, server.AddressPort.Address, server.AddressPort.Port)
 	fmt.Printf("SERVER START: Current time: %s | Offset is %fs \n", server.getTime().Format("15:04:05.000"), server.TimestampOffset.Seconds())
 	fmt.Println("Clients may now connect")
-
-	// leader starts the ConsistencyCheckLoop
-	if server.IsLeader {
-		go server.ConsistencyCheckLoop()
-	}
 
 	// Wait forever
 	select {}
