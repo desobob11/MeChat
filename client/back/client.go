@@ -107,31 +107,109 @@ type IDNumber struct {
 }
 
 // =================================================
-
-
+//  HELPER FUNCTIONS
+// =================================================
 
 /*
-    Function that receives an HTTP request from
+Function that acts as a wrapper around a Golang
+RPC call.
+*/
+func RemoteProcedureCall(funcName string, args any, reply any) error {
+
+	leaderFound := ConfirmLeader()
+	for !leaderFound {
+		leaderFound = ConfirmLeader() // sets rpc_client
+	}
+	fmt.Printf("Leader is now: %s:%d\n", ACTIVE_REPLICA.Address, ACTIVE_REPLICA.Port)
+	err := rpc_client.Call(funcName, args, reply) // check for highest leader everytime
+
+	return err
+
+}
+
+/*
+Function that converts a JSON object from an HTTP
+request into a Golang map
+*/
+func RequestToJson(req *http.Request) map[string]interface{} {
+	// map to store results
+	var data map[string]interface{}
+
+	// read object from HTTP
+	body_text, read_err := io.ReadAll(req.Body)
+	if read_err != nil {
+		return nil
+	}
+
+	// unmartial into map using json lib
+	err := json.Unmarshal(body_text, &data)
+	if err != nil {
+		return nil
+	}
+
+	return data
+}
+
+/*
+Function to read available backend IP/ports
+for possible backend replicas.
+
+These addresses are stored locally on machine,
+and may be updated by notifications from RPC
+*/
+func ReadReplicaAddresses(filename string) []ReplicaAddress {
+	var addrs []ReplicaAddress
+	bytes, _ := os.ReadFile(filename)
+
+	text := string(bytes)
+	lines := strings.Split(strings.ReplaceAll(text, "\r\n", "\n"), "\n")
+
+	for _, replica := range lines {
+		addr := strings.Split(replica, ":")[0]
+		port, _ := strconv.ParseUint(strings.Split(replica, ":")[1], 10, 16)
+		addrs = append(addrs, ReplicaAddress{addr, uint16(port)})
+	}
+
+	return addrs
+}
+
+// =================================================
+//  HTTP ENDPOINT FUNCTIONS
+// =================================================
+
+/*
+Function that receives a chat message from the front-end
+UI user. Received over HTTP.
+
+RPC is made to remote Golang server to submit message to backend
 */
 func HandleIncoming(w http.ResponseWriter, req *http.Request) {
-	var data map[string]interface{} // need me a JSON
+
+	// we expect a JSON object
+	var data map[string]interface{} // we expect
+
+	// try reading the JSON object
 	body_text, read_err := io.ReadAll(req.Body)
 	if read_err != nil {
 		http.Error(w, "Failure reading request", http.StatusBadRequest)
 		return
 	}
 
+	// convert object into Golang map
 	err := json.Unmarshal(body_text, &data)
 	if err != nil {
 		http.Error(w, "Failure converting request to JSON", http.StatusBadRequest)
 		return
 	}
+
+	// parse out fields from map
 	message, _ := data["Message"].(string)
 	timestamp, _ := data["Timestamp"].(string)
 	from := int(data["From"].(float64))
 	to := int(data["To"].(float64))
 	acked := 1
 
+	// instantiate out ChatMessage for RPC call
 	messageToBack := &ChatMessage{
 		Message:   message,
 		Timestamp: timestamp,
@@ -139,8 +217,14 @@ func HandleIncoming(w http.ResponseWriter, req *http.Request) {
 		To:        to,
 		Acked:     acked,
 	}
+
+	// string response expected from remote
 	var response string
+
+	// make RPC call with message, store result in response
 	resp := rpc_client.Call("MessageHandler.SaveMessage", messageToBack, &response)
+
+	// resp is either error or nil
 	if resp != nil {
 		fmt.Println("Error response from SaveMessage RPC ", resp)
 		w.WriteHeader(http.StatusBadRequest)
@@ -151,17 +235,10 @@ func HandleIncoming(w http.ResponseWriter, req *http.Request) {
 
 }
 
-func contains(arr []int, target int) bool {
-	for _, v := range arr {
-		if v == target {
-			return true
-		}
-	}
-	return false
-}
-
+// TODO: Skip for now Should this be done differently? Do we want backend to notify
+//
+//	client of leader change?
 func ConfirmLeader() bool {
-	// leaderIds := []int{}
 	leaderId := -1
 	for _, replica := range REPLICA_ADDRESSES {
 		caller, err := net.DialTimeout("tcp", fmt.Sprintf("%s:%d", replica.Address, replica.Port), 100*time.Millisecond) // #TODO MAKE FINDING NEW LEADER BETTER
@@ -186,48 +263,26 @@ func ConfirmLeader() bool {
 
 }
 
-func RemoteProcedureCall(funcName string, args any, reply any) error {
-
-	leaderFound := ConfirmLeader()
-	for !leaderFound {
-		leaderFound = ConfirmLeader() // sets rpc_client
-	}
-	fmt.Printf("Leader is now: %s:%d\n", ACTIVE_REPLICA.Address, ACTIVE_REPLICA.Port)
-	err := rpc_client.Call(funcName, args, reply) // check for highest leader everytime
-
-	return err
-
-}
-
-func RequestToJson(req *http.Request) map[string]interface{} {
-	var data map[string]interface{} // need me a JSON
-	body_text, read_err := io.ReadAll(req.Body)
-	if read_err != nil {
-		return nil
-	}
-
-	err := json.Unmarshal(body_text, &data)
-	if err != nil {
-		return nil
-	}
-
-	return data
-}
-
+/*
+HTTP endpoint function. Receives account create request from user,
+relays request to remote over RPC, and returns result
+of database operation
+*/
 func CreateAccount(w http.ResponseWriter, req *http.Request) {
+	// convert JSON object, into map, parse out values
 	data := RequestToJson(req)
-
 	email, _ := data["Email"].(string)
 	pass, _ := data["Password"].(string)
 	first, _ := data["Firstname"].(string)
 	last, _ := data["Lastname"].(string)
 	descr, _ := data["Descr"].(string)
 
+	// store passwords as sha256 digests
 	h := sha256.New()
 	h.Write([]byte(pass))
-
 	hash_pass := hex.EncodeToString(h.Sum(nil))
 
+	// instantiate message struct for use in RPC
 	messageToBack := &CreateAccountMessage{
 		Email:     email,
 		Password:  hash_pass,
@@ -236,13 +291,15 @@ func CreateAccount(w http.ResponseWriter, req *http.Request) {
 		Descr:     descr,
 	}
 
+	// make RPC call, store response
 	var response RPCResponse
 	resp := RemoteProcedureCall("MessageHandler.CreateAccount", messageToBack, &response)
 
+	// if there was an error, return error HTTP request
 	if resp != nil {
 		fmt.Println("Error response from create user RPC ", response)
 		w.WriteHeader(http.StatusBadRequest)
-	} else {
+	} else { // else send HTTP 200 OK, send back user info including new user ID
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
 		user_id, _ := strconv.Atoi(response.Message)
@@ -257,22 +314,30 @@ func CreateAccount(w http.ResponseWriter, req *http.Request) {
 	}
 }
 
+/*
+HTTP endpoint function. Receives an 'add contact'request from user,
+relays request to remote over RPC, and returns result
+of database operation
+*/
 func AddContact(w http.ResponseWriter, req *http.Request) {
+	// parse HTTP request, convert JSON string to map
 	data := RequestToJson(req)
-
 	user, _ := data["UserId"].(float64)
 	contact, _ := data["ContactId"].(float64)
 	int_user := int(user)
 	int_contact := int(contact)
 
+	// instantiate RPC message
 	messageToBack := &AddContactMessage{
 		UserId:    int_user,
 		ContactId: int_contact,
 	}
 
+	// make RPC call with remote backend
 	var response AddContactMessage
 	resp := RemoteProcedureCall("MessageHandler.AddContact", messageToBack, &response)
 
+	// handle errors
 	if resp != nil {
 		fmt.Println("Error adding contact: ", response)
 		w.WriteHeader(http.StatusBadRequest)
@@ -280,29 +345,35 @@ func AddContact(w http.ResponseWriter, req *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
 	}
-
 }
 
+/*
+HTTP endpoint function. Receives a 'login' request from user,
+relays request to remote over RPC, and returns result
+of database operation
+*/
 func Login(w http.ResponseWriter, req *http.Request) {
+	// unmarshall JSON object from request
 	data := RequestToJson(req)
-
 	email, _ := data["Email"].(string)
 	pass, _ := data["Password"].(string)
 
+	// calculate sha256 digest of attempted password
 	h := sha256.New()
 	h.Write([]byte(pass))
-
 	hash_pass := hex.EncodeToString(h.Sum(nil))
+
+	// instantiate message for RPC request
 	messageToBack := &LoginMessage{
 		Email:    email,
 		Password: hash_pass,
 	}
 
+	// make RPC call
 	var response UserProfile
 	err := RemoteProcedureCall("MessageHandler.Login", messageToBack, &response)
-	fmt.Println(err)
-	fmt.Println(response.UserId)
 
+	// handle errors, send appropriate HTTP respone to user webapp UI
 	if err != nil {
 		fmt.Println("Error response from create user RPC ", response)
 		w.WriteHeader(http.StatusBadRequest)
@@ -320,18 +391,26 @@ func Login(w http.ResponseWriter, req *http.Request) {
 	}
 }
 
+/*
+HTTP endpoint function. Receives an 'add contact'request from user,
+relays request to remote over RPC, and returns result
+of database operation
+
+Returns list of user's contacts to user client via HTTP
+*/
 func GetContacts(w http.ResponseWriter, req *http.Request) {
+	// process request message from user
 	data := RequestToJson(req)
-
 	userid := int(data["UserId"].(float64))
-
 	messageToBack := &UserProfile{
 		UserId: userid,
 	}
 
+	// ask RPC for contacts of this user id
 	var response Contacts
 	resp := RemoteProcedureCall("MessageHandler.GetContacts", messageToBack, &response)
 
+	// handle errors, relay contact list from RPC if HTTP 200 OK
 	if resp != nil {
 		fmt.Println(response)
 		w.WriteHeader(http.StatusBadRequest)
@@ -342,18 +421,26 @@ func GetContacts(w http.ResponseWriter, req *http.Request) {
 	}
 }
 
+/*
+HTTP endpoint function. Receives a 'get users' request from UI,
+invokes RPC with backend and returns registered users
+*/
 func GetAllUsers(w http.ResponseWriter, req *http.Request) {
+	// parse JSON object into map
 	data := RequestToJson(req)
 
 	userid := int(data["UserId"].(float64))
 
+	// instantiate struct for RPC, just need userid
 	messageToBack := &UserProfile{
 		UserId: userid,
 	}
 
+	// invoke RPC
 	var response Contacts
 	resp := RemoteProcedureCall("MessageHandler.GetAllUsers", messageToBack, &response)
 
+	// handle errors, return user list if HTTP 200 OK
 	if resp != nil {
 		fmt.Println(response)
 		w.WriteHeader(http.StatusBadRequest)
@@ -364,20 +451,30 @@ func GetAllUsers(w http.ResponseWriter, req *http.Request) {
 	}
 }
 
-func GetMessages(w http.ResponseWriter, req *http.Request) {
-	data := RequestToJson(req)
+/*
+HTTP endpoint function. Receives a 'get messages' request from user,
+relays request to remote over RPC, and returns result
+of database operation
 
+returns all messages between userid and contactid from RPC backend
+*/
+func GetMessages(w http.ResponseWriter, req *http.Request) {
+	// parse JSON request from user
+	data := RequestToJson(req)
 	userid := int(data["UserId"].(float64))
 	contactid := int(data["ContactId"].(float64))
 
+	// message to RPC call
 	messageToBack := &GetMessagesRequest{
 		UserId:    userid,
 		ContactId: contactid,
 	}
 
+	// invoke RPC
 	var response MessageList
 	resp := RemoteProcedureCall("MessageHandler.GetMessages", messageToBack, &response)
 
+	// handle errors
 	if resp != nil {
 		fmt.Println(response)
 		w.WriteHeader(http.StatusBadRequest)
@@ -388,6 +485,15 @@ func GetMessages(w http.ResponseWriter, req *http.Request) {
 	}
 }
 
+/*
+Function to handle routing
+of HTTP requests.
+
+This function runs an HTTP server
+on a separate thread. Endpoints available
+to client are registered
+with their appropriate RPC call functions.
+*/
 func HTTPThread() {
 	serv := http.NewServeMux()
 	serv.HandleFunc("/incoming", HandleIncoming)
@@ -400,45 +506,26 @@ func HTTPThread() {
 	http.ListenAndServe("127.0.0.1:8090", cors.Default().Handler(serv))
 }
 
-// function to read in hard-saved replica addresses
-func ReadReplicaAddresses(filename string) []ReplicaAddress {
-	var addrs []ReplicaAddress
-	bytes, _ := os.ReadFile(filename)
-
-	text := string(bytes)
-	lines := strings.Split(strings.ReplaceAll(text, "\r\n", "\n"), "\n")
-
-	for _, replica := range lines {
-		addr := strings.Split(replica, ":")[0]
-		port, _ := strconv.ParseUint(strings.Split(replica, ":")[1], 10, 16)
-		addrs = append(addrs, ReplicaAddress{addr, uint16(port)})
-	}
-
-	return addrs
-}
-
 func main() {
-
+	// parse possibl addresses
 	REPLICA_ADDRESSES = ReadReplicaAddresses(ADDRESS_FILE)
-	//ACTIVE_REPLICA = REPLICA_ADDRESSES[0]
 
-	// var err error
-	//rpc_client, err = rpc.Dial("tcp", fmt.Sprintf("%s:%d", ACTIVE_REPLICA.Address, ACTIVE_REPLICA.Port))
-	//if err != nil {
-	//    log.Fatal("Failed to connect to RPC", err)
-	//}
-
+	// ask back-end for leader address
 	leaderFound := ConfirmLeader()
 	for !leaderFound {
 		leaderFound = ConfirmLeader()
 	}
+
+	// output leader ID, debug after connect
 	fmt.Printf("Leader: %s:%d\n", ACTIVE_REPLICA.Address, ACTIVE_REPLICA.Port)
 	fmt.Println("RPC connection succeeded.")
 	fmt.Println(rpc_client)
+
+	// kickoff HTTP thread for client UI
+	// communication
 	var wg sync.WaitGroup
 	wg.Add(1)
 	go HTTPThread()
-
 	wg.Wait()
 
 }
