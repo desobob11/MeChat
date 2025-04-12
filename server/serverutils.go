@@ -1,26 +1,23 @@
 package main
 
+/*
+	Secondary back-end server source file.
+	
+	Contains logic for accessing SQL DB,
+	RPC interfaces for client-server communication
+
+*/
+
 import (
-	// "bufio"
 	"fmt"
-
 	"strconv"
-
-	// "strconv"
-	// "sync"
-
-	// "log"
-	// "net"
-	// "strings"
-	//  "net/rpc"
 	"database/sql"
-
 	_ "modernc.org/sqlite"
 )
 
-// const DB_NAME = "mechat.sqlite"
 const RPC_ADDRESS = "127.0.0.1:" // leave space for the port number
 
+// JSON object, represents chat message receieved by user
 type ChatMessage struct {
 	Message   string
 	Timestamp string
@@ -29,6 +26,7 @@ type ChatMessage struct {
 	Acked     int
 }
 
+// JSON object, represents create account request received from user
 type CreateAccountMessage struct {
 	Email     string
 	Password  string
@@ -37,6 +35,8 @@ type CreateAccountMessage struct {
 	Descr     string
 }
 
+// JSON object, represents details that are relevant to a user, regaring
+// other user profiles
 type UserProfile struct {
 	UserId    int
 	Email     string
@@ -45,33 +45,46 @@ type UserProfile struct {
 	Descr     string
 }
 
+// JSON object, represents a chat between two users. Used
+// for querying sent chat messages
 type GetMessagesRequest struct {
 	UserId    int
 	ContactId int
 }
 
+// JSON object, array of user profiles
 type Contacts struct {
 	ContactList []UserProfile
 }
 
+// JSON object, arrat of Chat messages
 type MessageList struct {
 	Messages []ChatMessage
 }
 
+// JSON object, represents email and password provided by user
 type LoginMessage struct {
 	Email    string
 	Password string
 }
 
+// JSON object, represents a specific RPC response from a remote
+// message handler
 type RPCResponse struct {
 	Message string
 }
 
+// JSON object, represents a request to create a new chat between two users
 type AddContactMessage struct {
-    UserId int
-    ContactId int
+	UserId    int
+	ContactId int
 }
 
+// JSON object, user ID number, wrapping in struct is necessary
+// for Golang RPC
+type IDNumber struct {
+	ID int
+}
 
 // Debug Function
 type NodeInfo struct {
