@@ -6,19 +6,29 @@ import clsx from 'clsx'
 import { GlobalProvider, useGlobal } from "../globalContext";
 
 
+/**
+ * ChatBox React component
+ * 
+ * Manages scrollable chat window on right side of main screen
+ * 
+ * 
+ */
 
 
+/**
+ * Chat bubble
+ * 
+ */
 export const ChatBubble = forwardRef((props, ref) => {
 
 
-
+    // styles depending on sender vs receiver
     const class_recv = "m-4 grid grid-cols-1 p-2 rounded-xl bg-gray-100 text-gray-700 w-fit max-w-[50%] justify-self-start";
     const class_send = "m-4 grid grid-cols-1 p-2 rounded-xl bg-gradient-to-b from-blue-400 to-blue-500 text-white w-fit max-w-[50%] justify-self-end";
 
-    return (
+    return (   
+        // colored / styled div based on sender vs receiver
         <div className="grid grid-cols-1" ref={ref}>
-
-
             <div className={props.recv === true ? class_recv : class_send}>
                 <text className="font-sans text-base">
                     {props.msg}
@@ -31,34 +41,26 @@ export const ChatBubble = forwardRef((props, ref) => {
     );
 })
 
-class Message {
-    constructor(from, to, msg, timestamp, acked) {
-        this.from = from;
-        this.to = to;
-        this.msg = msg;
-        this.timestamp = timestamp;
-        this.acked = acked;
-    }
-}
 
 
-
-
+/**
+ * Manages actual chatbox
+ * 
+ * @returns 
+ */
 export default function ChatBox() {
 
-    const {renderedMessages, setRenderedMessages} = useGlobal([])
-    const {selectedContactId, setSelectedContactId} = useGlobal();
-    const [currentInput, setCurrentInput] = useState("");
-    
-
-    const {userProfile, setUserProfile} = useGlobal()
+    const {renderedMessages, setRenderedMessages} = useGlobal([])   // messaged to show
+    const {selectedContactId, setSelectedContactId} = useGlobal();  // chat id
+    const [currentInput, setCurrentInput] = useState("");   // text in input
+    const {userProfile, setUserProfile} = useGlobal()   // global user profiled
 
     
     useEffect(() => {
         if (selectedContactId !== -1) {
             GetMessages();
     
-            const interval = setInterval(() => {
+            const interval = setInterval(() => {    // ping for latest messages every second
                 GetMessages();
             }, 1000); 
     
@@ -68,10 +70,12 @@ export default function ChatBox() {
         if (latestMessage.current) {
             latestMessage.current.scrollIntoView({ behavior: "smooth" });
         }
-    
     }, [selectedContactId]);
 
 
+    /**
+     * Scroll down to latest message
+     */
     useEffect(() => {
         if (latestMessage.current) {
             latestMessage.current.scrollIntoView({ behavior: "smooth" });
@@ -81,18 +85,21 @@ export default function ChatBox() {
 
 
 
-
+    /**
+     * Request messages from backend
+     */
     const GetMessages = () => {
         var req_body = {
-            UserId: userProfile.UserId,
+            UserId: userProfile.UserId, // send my userid and selected contact
             ContactId: selectedContactId,
         }
 
-        const options = {
+        const options = {       // 
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(req_body),
         };
+        // HTTP, localhost to client process
         fetch(`http://127.0.0.1:${BACK_END_PORT}/${MESSAGES_ROUTE}`, options)
         .then(response => {
         if (!response.ok) {
@@ -102,7 +109,7 @@ export default function ChatBox() {
         else {
             return response.text()
         }
-        })
+        })  // result
         .then(data => {
             if (JSON.parse(data) !== null) {  // screw it no messages for now I guess
                 setRenderedMessages(JSON.parse(data))
@@ -120,6 +127,10 @@ export default function ChatBox() {
     }
 
 
+    /**
+     *  Send message to backend, set JSON object and HTTP over localhost
+     * @param {*} _msg 
+     */
     const sendInputToBack = (_msg) => {
         var req_body = {
             From: _msg.From,
@@ -138,7 +149,10 @@ export default function ChatBox() {
 
 
     
-
+    /**
+     * Send message to backend on form submit
+     * @param {*} e 
+     */
     const handleSubmit = (e) => {
         e.preventDefault();
         var now = new Date();
@@ -163,6 +177,7 @@ export default function ChatBox() {
             </text>
             <ul role="list" className=" shadow-md rounded-xl h-96 overflow-auto">
                 {renderedMessages.map((_msg, index) => (
+                    // list of chatbubbles formatted with messages from backend
                     <li key={index}>
                         <ChatBubble  ref={index === renderedMessages.length - 1 ? latestMessage : null}
                          msg={_msg.Message} timestamp={_msg.Timestamp} recv={_msg.From !== userProfile.UserId} />

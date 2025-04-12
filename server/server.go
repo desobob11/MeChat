@@ -1,5 +1,16 @@
 package main
 
+/*
+	Main source file for back-end server. Contains
+	all implementations and logic for distribution
+
+	Contains source code implementing:
+	1. Replication
+	2. Fault Tolerance + Leader Election
+	3. Synchronization + Consistency
+
+*/
+
 import (
 	"database/sql"
 	"encoding/json"
@@ -14,7 +25,6 @@ import (
 	"strings"
 	"sync"
 	"time"
-
 	_ "modernc.org/sqlite"
 )
 

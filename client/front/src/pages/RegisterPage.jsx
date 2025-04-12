@@ -6,8 +6,16 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useEffect, useState } from 'react';
 import { REGISTER_ROUTE, BACK_END_PORT } from '../const';
 import { GlobalProvider, useGlobal } from '../globalContext';
+/**
+ * Register page component
+ * 
+ * Based on Tailwind templates:
+ * https://tailwindcss.com/plus/ui-blocks/application-ui/forms/sign-in-forms
+ * 
+ * 
+ */
 
-
+// Json object format of 'create account' message that is sent to backend
 class CreateAccountMessage {
   constructor(pass, email, first, last, descr) {
     this.email = email;
@@ -20,10 +28,16 @@ class CreateAccountMessage {
 
 
 
-
+/**
+ * Main logic component
+ * 
+ * @returns 
+ * 
+ */
 export default function RegisterPage() {
-  const {userProfile, setUserProfile} = useGlobal()
+  const {userProfile, setUserProfile} = useGlobal()   // sets global user profile on successful login
 
+  // form inputs
   const [password, setPassword] = useState("")
   const [email, setEmail] = useState("")
   const [firstname, setFirstname] = useState("")
@@ -33,13 +47,15 @@ export default function RegisterPage() {
 
   const navigate = useNavigate()
 
-
   useEffect(() => {
-    if (Object.keys(userProfile).length > 1) {
+    if (Object.keys(userProfile).length > 1) {    // route to home page if account creation successful
       navigate("/home")
     }
   }, [userProfile])
 
+
+  // send details to backend, try to create user
+  // gets user profile details if created successfully
     const sendInputToBack = (_createMsg) => {
         var req_body = {
             Email: _createMsg.email,
