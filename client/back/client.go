@@ -187,7 +187,7 @@ func getLocalIP() string {
 }
 
 
-func (l *LeaderConnManager) receiveLeaderAddress(message *ReplicaAddress, _ *ReplicaAddress) error {
+func (l *LeaderConnManager) ReceiveLeaderAddress(message *ReplicaAddress, _ *ReplicaAddress) error {
 	l.Mutex.Lock()
 	defer l.Mutex.Unlock()
 	LEADER_CONN.ActiveReplica.Address = message.Address
@@ -207,7 +207,7 @@ func (l *LeaderConnManager) HandleRPC(rpc_address string) {
 
 
 	// Start listening on 5999 (hardcoded for clients)
-	listener, err := net.Listen("tcp", fmt.Sprintf("%s:%s", getLocalIP(), "5999"))
+	listener, err := net.Listen("tcp", fmt.Sprintf("%s:%s", getLocalIP(), "59999"))
 	fmt.Println("Listening on", rpc_address)
 	if err != nil {
 		fmt.Println("Failure listening for RPC calls:", err)
@@ -560,7 +560,7 @@ func HTTPThread() {
 }
 
 
-/*
+
 func main() {
 	// parse possibl addresses
 	REPLICA_ADDRESSES = ReadReplicaAddresses(ADDRESS_FILE)
@@ -586,4 +586,3 @@ func main() {
 	wg.Wait()
 
 }
-*/

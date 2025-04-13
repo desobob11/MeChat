@@ -16,6 +16,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	_ "modernc.org/sqlite"
 	"net"
 	"net/rpc"
 	"os"
@@ -25,7 +26,6 @@ import (
 	"strings"
 	"sync"
 	"time"
-	_ "modernc.org/sqlite"
 )
 
 // Struct to store address/port for replicas
@@ -298,23 +298,71 @@ func (s *Server) SetBackupNodes(addresses []ReplicaAddress) {
 	}
 }
 
-
 func (s *Server) cacheIP(conn net.Conn) error {
-		// raw SQL script to insert message
-		script := `INSERT INTO ip (
+	// raw SQL script to insert message
+	script := `INSERT INTO ip (
 			[addr]) 
 			VALUES (?);`
-	
-		// execute script against database
-		_, err := s.DB.Exec(script, conn.RemoteAddr().String())
-		
-		// handle error
-		if err != nil {
-			fmt.Println("Error caching ip: likely duplicate ") // should print out rows changed here eventually
-		}
-		return err
+
+	// execute script against database
+	_, err := s.DB.Exec(script, conn.RemoteAddr().String())
+
+	// handle error
+	if err != nil {
+		fmt.Println("Error caching ip: likely duplicate ") // should print out rows changed here eventually
+	}
+	return err
 }
 
+func (s *Server) SendLeaderAddressToClients() error {
+	query := `SELECT
+	[addr]
+	FROM ip;`
+
+	// attempt to query messages
+	rows, err := s.DB.Query(query)
+	if err != nil {
+		fmt.Println("Error getting user IP for leader update", err)
+		return err
+	}
+
+	// add ChatMessage struct to RPC invoker's reference for
+	// each unique message pulled from database
+	addrs := []string{}
+	for rows.Next() {
+		var rec string
+		err = rows.Scan(&rec)
+		if err != nil {
+			fmt.Println("Error parsing user IPs err")
+			rows.Close()
+			return err
+		}
+		addrs = append(addrs, rec)
+	}
+
+	// close connection
+	rows.Close()
+
+	for _, addr := range addrs {
+		ip := strings.Split(addr, `:`)[0]
+		//
+		go func(ip string) {
+			// ignore errors, skip inactive users
+			caller, _ := net.DialTimeout("tcp", fmt.Sprintf("%s:%d", ip, "59999"), 2*time.Second)
+
+			leaderAddres := &ReplicaAddress{
+				s.AddressPort.Address,
+				s.AddressPort.Port,
+			}
+
+			// ignore errors, skip inactive users
+			var resp ReplicaAddress
+			rpc_client := rpc.NewClient(caller)
+			rpc_client.Call("LeaderConnManager.ReceiveLeaderAddress", leaderAddres, &resp) // ignore errors, skip inactive users
+		}(ip)
+	}
+	return nil
+}
 
 // Handler for RPC connections
 func (s *Server) HandleRPC(rpc_address string, msg *MessageHandler, rep *ReplicationHandler) {
@@ -815,8 +863,8 @@ func (r *ReplicationHandler) BullyFailureDetector() bool {
 
 	leader_addr := r.server.BackupNodes[r.server.LeaderID]
 	addr_string := net.JoinHostPort(leader_addr.Address, fmt.Sprintf("%d", leader_addr.Port))
-	t_trans := 50 * time.Millisecond;
-	t_proc := 10 * time.Millisecond;
+	t_trans := 50 * time.Millisecond
+	t_proc := 10 * time.Millisecond
 	t := (2 * t_trans) + t_proc
 
 	caller, err := net.DialTimeout("tcp", addr_string, t) // need a timeout here, else this hangs if backup not reachable
