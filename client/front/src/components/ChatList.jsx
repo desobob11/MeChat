@@ -188,7 +188,7 @@ export default function ChatList() {
         const interval = setInterval(() => {    // ask for latest users and contacts silently every second
             GetContacts();
             getAllUsers();
-        }, 1000);
+        }, 3000);
         return () => clearInterval(interval);
     }, []);
 

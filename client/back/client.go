@@ -115,11 +115,6 @@ RPC call.
 */
 func RemoteProcedureCall(funcName string, args any, reply any) error {
 
-	leaderFound := ConfirmLeader()
-	for !leaderFound {
-		leaderFound = ConfirmLeader() // sets rpc_client
-	}
-	fmt.Printf("Leader is now: %s:%d\n", ACTIVE_REPLICA.Address, ACTIVE_REPLICA.Port)
 	err := rpc_client.Call(funcName, args, reply) // check for highest leader everytime
 
 	return err
@@ -238,27 +233,26 @@ func HandleIncoming(w http.ResponseWriter, req *http.Request) {
 //
 //	client of leader change?
 func ConfirmLeader() bool {
-	leaderId := -1
-	for _, replica := range REPLICA_ADDRESSES {
-		caller, err := net.DialTimeout("tcp", fmt.Sprintf("%s:%d", replica.Address, replica.Port), 100*time.Millisecond) // #TODO MAKE FINDING NEW LEADER BETTER
+	// check possible leaders one at a time, starting from highest ID
+	// first contact we make is leader by definition (highest active server)
+	for i := len(REPLICA_ADDRESSES) - 1; i >= 0; i-- {
+		replica := REPLICA_ADDRESSES[i]
+		caller, err := net.DialTimeout("tcp", fmt.Sprintf("%s:%d", replica.Address, replica.Port), 1*time.Second)
 
 		if err == nil {
 			var pid IDNumber
 			msg := IDNumber{-1}
 			client := rpc.NewClient(caller)
 			client.Call("MessageHandler.GetPID", msg, &pid)
-			if pid.ID > leaderId {
-				leaderId = pid.ID
-			}
+			ACTIVE_REPLICA = REPLICA_ADDRESSES[pid.ID]
+			rpc_client, _ = rpc.Dial("tcp", fmt.Sprintf("%s:%d", ACTIVE_REPLICA.Address, ACTIVE_REPLICA.Port))
+			fmt.Printf("Leader is now: %s:%d\n", ACTIVE_REPLICA.Address, ACTIVE_REPLICA.Port)
+			return true	// leader found
 		}
 	}
-	if leaderId == -1 {
-		return false
-	}
+	fmt.Printf("No leader found yet")
+	return false		// no leader found
 
-	ACTIVE_REPLICA = REPLICA_ADDRESSES[leaderId]
-	rpc_client, _ = rpc.Dial("tcp", fmt.Sprintf("%s:%d", ACTIVE_REPLICA.Address, ACTIVE_REPLICA.Port))
-	return true
 
 }
 
@@ -505,9 +499,13 @@ func HTTPThread() {
 	http.ListenAndServe("127.0.0.1:8090", cors.Default().Handler(serv))
 }
 
+
+
 func main() {
 	// parse possibl addresses
 	REPLICA_ADDRESSES = ReadReplicaAddresses(ADDRESS_FILE)
+
+
 
 	// ask back-end for leader address
 	leaderFound := ConfirmLeader()
