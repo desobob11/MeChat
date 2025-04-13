@@ -16,6 +16,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	_"errors"
 )
 
 var ADDRESS_FILE = "replica_addrs.txt"
@@ -24,7 +25,7 @@ var LEADER_CONN LeaderConnManager
 
 type LeaderConnManager struct {
 	ActiveReplica ReplicaAddress
-	Mutex sync.Mutex
+	Mutex         sync.Mutex
 }
 
 type ReplicaAddress struct {
@@ -110,6 +111,7 @@ type IDNumber struct {
 	ID int
 }
 
+var userMutex sync.Mutex
 
 // =================================================
 //  HELPER FUNCTIONS
@@ -120,10 +122,36 @@ Function that acts as a wrapper around a Golang
 RPC call.
 */
 func RemoteProcedureCall(funcName string, args any, reply any) error {
+	for {
+		err := rpc_client.Call(funcName, args, reply)		// this
+		if err == nil {
+			fmt.Print("NO ERROR")
+			break
+		}
 
-	err := rpc_client.Call(funcName, args, reply) // check for highest leader everytime
-	return err
 
+		/*
+		net.Error not applicable here, for now
+		var netErr net.Error
+		if !errors.As(err, &netErr) {
+			fmt.Println("JUST NET ERROR")
+			break	// if it is NOT a network error, but say an SQL query
+					// error (incorrect password, etc) then that is ok
+		}
+					
+		*/
+
+		// failing to connect to RPC is not a net.Error, but there
+		// is no rpc.Error type. This is the error string I was getting,
+		//	so checking against this manually
+		if !(strings.Contains(err.Error(), "connection is shut down")) {
+			break
+		}
+
+
+		time.Sleep(1 * time.Second)
+	}
+	return nil
 }
 
 /*
@@ -172,7 +200,6 @@ func ReadReplicaAddresses(filename string) []ReplicaAddress {
 	return addrs
 }
 
-
 func getLocalIP() string {
 	conn, err := net.Dial("udp", "8.8.8.8:80")
 	if err != nil {
@@ -186,26 +213,25 @@ func getLocalIP() string {
 	return localAddr.IP.String()
 }
 
-
 func (l *LeaderConnManager) ReceiveLeaderAddress(message *ReplicaAddress, _ *ReplicaAddress) error {
 	l.Mutex.Lock()
 	defer l.Mutex.Unlock()
 	LEADER_CONN.ActiveReplica.Address = message.Address
 	LEADER_CONN.ActiveReplica.Port = message.Port
+	// reset RPC client
+	rpc_client, _ = rpc.Dial("tcp", fmt.Sprintf("%s:%d", LEADER_CONN.ActiveReplica.Address, LEADER_CONN.ActiveReplica.Port))
 	fmt.Printf("Leader is now: %s:%d\n", LEADER_CONN.ActiveReplica.Address, LEADER_CONN.ActiveReplica.Port)
 	return nil
 }
 
-
-
 // Handler for RPC connections
 func (l *LeaderConnManager) HandleRPC() {
+
 	// Create a new RPC server for this instance
 	rpcServer := rpc.NewServer()
 
 	// Register handlers with this specific server
 	rpcServer.RegisterName("LeaderConnManager", &LEADER_CONN)
-
 
 	// Start listening on 5999 (hardcoded for clients)
 	//listener, err := net.Listen("tcp", fmt.Sprintf("%s:%s", getLocalIP(), "59999"))
@@ -227,8 +253,6 @@ func (l *LeaderConnManager) HandleRPC() {
 	}
 }
 
-
-
 // =================================================
 //  HTTP ENDPOINT FUNCTIONS
 // =================================================
@@ -240,6 +264,8 @@ UI user. Received over HTTP.
 RPC is made to remote Golang server to submit message to backend
 */
 func HandleIncoming(w http.ResponseWriter, req *http.Request) {
+	userMutex.Lock()
+	defer userMutex.Unlock()
 
 	// we expect a JSON object
 	var data map[string]interface{} // we expect
@@ -278,7 +304,7 @@ func HandleIncoming(w http.ResponseWriter, req *http.Request) {
 	var response string
 
 	// make RPC call with message, store result in response
-	resp := rpc_client.Call("MessageHandler.SaveMessage", messageToBack, &response)
+	resp := RemoteProcedureCall("MessageHandler.SaveMessage", messageToBack, &response)
 
 	// resp is either error or nil
 	if resp != nil {
@@ -295,6 +321,8 @@ func HandleIncoming(w http.ResponseWriter, req *http.Request) {
 //
 //	client of leader change?
 func ConfirmLeader() bool {
+	userMutex.Lock()
+	defer userMutex.Unlock()
 	// check possible leaders one at a time, starting from highest ID
 	// first contact we make is leader by definition (highest active server)
 	for i := len(REPLICA_ADDRESSES) - 1; i >= 0; i-- {
@@ -309,12 +337,11 @@ func ConfirmLeader() bool {
 			LEADER_CONN.ActiveReplica = REPLICA_ADDRESSES[pid.ID]
 			rpc_client, _ = rpc.Dial("tcp", fmt.Sprintf("%s:%d", LEADER_CONN.ActiveReplica.Address, LEADER_CONN.ActiveReplica.Port))
 			fmt.Printf("Leader is now: %s:%d\n", LEADER_CONN.ActiveReplica.Address, LEADER_CONN.ActiveReplica.Port)
-			return true	// leader found
+			return true // leader found
 		}
 	}
 	fmt.Printf("No leader found yet")
-	return false		// no leader found
-
+	return false // no leader found
 
 }
 
@@ -324,6 +351,8 @@ relays request to remote over RPC, and returns result
 of database operation
 */
 func CreateAccount(w http.ResponseWriter, req *http.Request) {
+	userMutex.Lock()
+	defer userMutex.Unlock()
 	// convert JSON object, into map, parse out values
 	data := RequestToJson(req)
 	email, _ := data["Email"].(string)
@@ -375,6 +404,8 @@ relays request to remote over RPC, and returns result
 of database operation
 */
 func AddContact(w http.ResponseWriter, req *http.Request) {
+	userMutex.Lock()
+	defer userMutex.Unlock()
 	// parse HTTP request, convert JSON string to map
 	data := RequestToJson(req)
 	user, _ := data["UserId"].(float64)
@@ -408,6 +439,8 @@ relays request to remote over RPC, and returns result
 of database operation
 */
 func Login(w http.ResponseWriter, req *http.Request) {
+	userMutex.Lock()
+	defer userMutex.Unlock()
 	// unmarshall JSON object from request
 	data := RequestToJson(req)
 	email, _ := data["Email"].(string)
@@ -454,6 +487,8 @@ of database operation
 Returns list of user's contacts to user client via HTTP
 */
 func GetContacts(w http.ResponseWriter, req *http.Request) {
+	userMutex.Lock()
+	defer userMutex.Unlock()
 	// process request message from user
 	data := RequestToJson(req)
 	userid := int(data["UserId"].(float64))
@@ -474,6 +509,7 @@ func GetContacts(w http.ResponseWriter, req *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		json.NewEncoder(w).Encode(response.ContactList)
 	}
+	fmt.Println("SENT BACK RESPONSE")
 }
 
 /*
@@ -481,6 +517,8 @@ HTTP endpoint function. Receives a 'get users' request from UI,
 invokes RPC with backend and returns registered users
 */
 func GetAllUsers(w http.ResponseWriter, req *http.Request) {
+	userMutex.Lock()
+	defer userMutex.Unlock()
 	// parse JSON object into map
 	data := RequestToJson(req)
 
@@ -514,6 +552,8 @@ of database operation
 returns all messages between userid and contactid from RPC backend
 */
 func GetMessages(w http.ResponseWriter, req *http.Request) {
+	userMutex.Lock()
+	defer userMutex.Unlock()
 	// parse JSON request from user
 	data := RequestToJson(req)
 	userid := int(data["UserId"].(float64))
@@ -561,13 +601,9 @@ func HTTPThread() {
 	http.ListenAndServe("127.0.0.1:8090", cors.Default().Handler(serv))
 }
 
-
-
 func main() {
 	// parse possibl addresses
 	REPLICA_ADDRESSES = ReadReplicaAddresses(ADDRESS_FILE)
-
-
 
 	// ask back-end for leader address
 	leaderFound := ConfirmLeader()
@@ -579,8 +615,6 @@ func main() {
 	fmt.Printf("Leader: %s:%d\n", LEADER_CONN.ActiveReplica.Address, LEADER_CONN.ActiveReplica.Port)
 	fmt.Println("RPC connection succeeded.")
 	fmt.Println(rpc_client)
-
-
 
 	// kickoff HTTP thread for client UI
 	// communication

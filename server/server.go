@@ -701,6 +701,7 @@ func (r *ReplicationHandler) InitiateElection() bool {
 			r.server.LeaderID = r.server.PID
 			r.server.Running = false
 			SendBullyMessage(replica, "BullyLeader", msg, &resp)
+			r.server.SendLeaderAddressToClients()
 		}
 	} else {
 		electionResponse := ReplicationResponse{LastIndex: -1}
@@ -724,6 +725,8 @@ func (r *ReplicationHandler) InitiateElection() bool {
 				msg := BullyMessage{PID: r.server.PID, Message: "LEADER"}
 				SendBullyMessage(replica, "BullyLeader", msg, nil)
 			}
+			r.server.SendLeaderAddressToClients()
+			
 		} else {
 			time.Sleep(1 * time.Second)
 			//if r.server.LeaderID == current_leader {			// no leader change
@@ -733,9 +736,6 @@ func (r *ReplicationHandler) InitiateElection() bool {
 			//}
 		}
 
-	}
-	if (r.server.LeaderID == r.server.PID) {
-		r.server.SendLeaderAddressToClients()
 	}
 	return false
 }
@@ -1028,8 +1028,11 @@ func main() {
 	}
 
 	// only kick off election if we are higher PID
-	if server.LeaderID < server.PID {
+	if server.LeaderID != server.PID {
 		replicationHandler.InitiateElection()
+	} else {
+		// let any clients know that we are the leader
+		server.SendLeaderAddressToClients()
 	}
 
 	go replicationHandler.BullyAlgorithmThread() // NEED TO detect leader failures
