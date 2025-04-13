@@ -871,8 +871,8 @@ func (r *ReplicationHandler) BullyFailureDetector() bool {
 
 	leader_addr := r.server.BackupNodes[r.server.LeaderID]
 	addr_string := net.JoinHostPort(leader_addr.Address, fmt.Sprintf("%d", leader_addr.Port))
-	t_trans := 50 * time.Millisecond
-	t_proc := 10 * time.Millisecond
+	t_trans := 100 * time.Millisecond	// upper bound
+	t_proc := 25 * time.Millisecond		// upper bound
 	t := (2 * t_trans) + t_proc
 
 	caller, err := net.DialTimeout("tcp", addr_string, t) // need a timeout here, else this hangs if backup not reachable
