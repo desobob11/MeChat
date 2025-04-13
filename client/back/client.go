@@ -125,7 +125,6 @@ func RemoteProcedureCall(funcName string, args any, reply any) error {
 	for {
 		err := rpc_client.Call(funcName, args, reply)		// this
 		if err == nil {
-			fmt.Print("NO ERROR")
 			break
 		}
 
@@ -509,7 +508,6 @@ func GetContacts(w http.ResponseWriter, req *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		json.NewEncoder(w).Encode(response.ContactList)
 	}
-	fmt.Println("SENT BACK RESPONSE")
 }
 
 /*
