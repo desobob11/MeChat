@@ -142,20 +142,25 @@ func BuildDatabase(database_name string) (*sql.DB, error) {
 		return nil, err
 	}
 
+	dbMutex.Lock()
 	_, err = db.Exec(contacts_script)
+	dbMutex.Unlock()
 	if err != nil {
 		fmt.Println("Error creating contacts table. ")
 		return nil, err
 	}
 
+	dbMutex.Lock()
 	_, err = db.Exec(messages_script)
+	dbMutex.Unlock()
 	if err != nil {
 		fmt.Println("Error creating messages table. ")
 		return nil, err
 	}
 
-	
+	dbMutex.Lock()
 	_, err = db.Exec(ip_script)
+	dbMutex.Unlock()
 	if err != nil {
 		fmt.Println("Error creating IP table. ")
 		return nil, err

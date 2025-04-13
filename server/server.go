@@ -119,6 +119,9 @@ class Message {
 var ADDRESS_FILE = "replica_addrs.txt"
 var REPLICA_ADDRESSES []ReplicaAddress
 
+// need global, its mutex acts as DB write mutex
+var messageHandler MessageHandler	
+
 // function to read in hard-saved replica addresses
 func ReadReplicaAddresses(filename string) []ReplicaAddress {
 	var addrs []ReplicaAddress
@@ -300,8 +303,7 @@ func (s *Server) SetBackupNodes(addresses []ReplicaAddress) {
 
 func (s *ReplicationHandler) cacheIP(conn net.Conn) error {
 	// need to acquire lock to not conflict with applying entries
-	s.mutex.Lock();
-	defer s.mutex.Unlock();
+
 
 	// raw SQL script to insert message
 	script := `INSERT INTO ip (
@@ -309,7 +311,9 @@ func (s *ReplicationHandler) cacheIP(conn net.Conn) error {
 			VALUES (?);`
 
 	// execute script against database
+	messageHandler.mutex.Lock()
 	_, err := s.server.DB.Exec(script, conn.RemoteAddr().String())
+	messageHandler.mutex.Unlock()
 	// handle error
 	if err != nil {
 		//fmt.Println("Error caching ip: likely duplicate ") // should print out rows changed here eventually
@@ -496,7 +500,9 @@ func (r *ReplicationHandler) ApplyEntries(req *ReplicationRequest, resp *Replica
 		}
 
 		// Execute the SQL statement
+		messageHandler.mutex.Lock()
 		_, err := s.DB.Exec(entry.SQL, entry.Args...)
+		messageHandler.mutex.Unlock()
 		if err != nil {
 			resp.Success = false
 			resp.Message = fmt.Sprintf("error applying SQL: %v", err)
@@ -970,6 +976,7 @@ func ConfirmLeader(s *Server) bool {
 
 }
 
+
 func main() {
 	// Configuration
 
@@ -998,7 +1005,7 @@ func main() {
 	// Start the leader first (PID 0)
 	server := spawn_server(0)
 
-	messageHandler := MessageHandler{server: server}
+	messageHandler = MessageHandler{server: server}
 	replicationHandler := ReplicationHandler{server: server}
 
 	// Start RPC server
