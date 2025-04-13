@@ -557,15 +557,12 @@ func (t *MessageHandler) GetAllUsers(message *UserProfile, contacts *Contacts) e
 
 	// query
 	query := `SELECT
-                U.userid,
-                U.email,
-                U.firstname,
-                U.lastname,
-                U.descr
-                FROM contacts C
-                INNER JOIN users U
-                ON U.userid = C.contactid
-                WHERE C.userid = ?`
+                userid,
+                email,
+                firstname,
+                lastname,
+                descr
+                FROM users`
 
 
 	// we need to find any of these users, so get resultset

@@ -97,7 +97,7 @@ export const NameListItem = (props) => {
 export const NameList = (props) => {
 
     const { allUsers, setAllUsers } = useGlobal();      // all users in system (proof of concept, pulled at page load)
-    const [usersToDisplay, setUsersToDisplay] = useState([])   
+    const [usersToDisplay, setUsersToDisplay] = useState([])
     const [currentInput, setCurrentInput] = useState("");
 
     // filter names in list based on input text content
@@ -182,7 +182,7 @@ export default function ChatList() {
     const [chatSearchText, setChatSearchText] = useState("")    // text box, searching through chats
     const { allUsers, setAllUsers } = useGlobal();  // all users from backend (Proof of concept)
 
-    
+
     // need to continuously check for use
     useEffect(() => {
         const interval = setInterval(() => {    // ask for latest users and contacts silently every second
@@ -192,11 +192,21 @@ export default function ChatList() {
         return () => clearInterval(interval);
     }, []);
 
+    useEffect(() => {
+    }, [contacts]);
+
 
 
     const handleInputChange = (e) => {
-        setChatSearchText(e.target.value);
-        setSearchContacts(contacts.filter((user) => `${user.Firstname}${user.Lastname}${user.Email}`.toLowerCase().includes(e.target.value.toLowerCase())))
+        setChatSearchText(e.target.value)
+        if (e.target.value === "") {
+            setSearchContacts(contacts.slice());
+        }
+        else {
+            setSearchContacts(contacts.filter(
+                (user) => `${user.Firstname}${user.Lastname}${user.Email}`.toLowerCase().includes(e.target.value.toLowerCase())
+            ));
+        }
     }
 
 
@@ -259,7 +269,9 @@ export default function ChatList() {
             })
             .then(data => {
                 const parsedData = JSON.parse(data)
-                setContacts(parsedData ? parsedData : [])
+                let contactList = parsedData ? parsedData : [];
+                setContacts(contactList)
+                setSearchContacts(contactList.slice())
             })
 
     }
@@ -312,7 +324,7 @@ export default function ChatList() {
                                 />
                             </button>
                         ))
-                
+
                     }
                 </ul>
             )}
