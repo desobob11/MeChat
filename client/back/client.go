@@ -116,7 +116,6 @@ RPC call.
 func RemoteProcedureCall(funcName string, args any, reply any) error {
 
 	err := rpc_client.Call(funcName, args, reply) // check for highest leader everytime
-
 	return err
 
 }

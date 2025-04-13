@@ -298,6 +298,24 @@ func (s *Server) SetBackupNodes(addresses []ReplicaAddress) {
 	}
 }
 
+
+func (s *Server) cacheIP(conn net.Conn) error {
+		// raw SQL script to insert message
+		script := `INSERT INTO ip (
+			[addr]) 
+			VALUES (?);`
+	
+		// execute script against database
+		_, err := s.DB.Exec(script, conn.RemoteAddr().String())
+		
+		// handle error
+		if err != nil {
+			fmt.Println("Error caching ip: likely duplicate ") // should print out rows changed here eventually
+		}
+		return err
+}
+
+
 // Handler for RPC connections
 func (s *Server) HandleRPC(rpc_address string, msg *MessageHandler, rep *ReplicationHandler) {
 	// Create a new RPC server for this instance
@@ -321,7 +339,11 @@ func (s *Server) HandleRPC(rpc_address string, msg *MessageHandler, rep *Replica
 			log.Println("Failure accepting RPC call:", err)
 			continue
 		}
+		go s.cacheIP(conn)
 		go rpcServer.ServeConn(conn)
+		fmt.Println(conn.RemoteAddr().Network())
+		fmt.Println(conn.RemoteAddr().String())
+
 	}
 }
 
