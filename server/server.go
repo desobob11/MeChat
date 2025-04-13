@@ -309,12 +309,13 @@ func (s *Server) cacheIP(conn net.Conn) error {
 
 	// handle error
 	if err != nil {
-		fmt.Println("Error caching ip: likely duplicate ") // should print out rows changed here eventually
+		//fmt.Println("Error caching ip: likely duplicate ") // should print out rows changed here eventually
 	}
 	return err
 }
 
 func (s *Server) SendLeaderAddressToClients() error {
+	fmt.Println("SENDING LEADER ADDRESSES")
 	query := `SELECT
 	[addr]
 	FROM ip;`
@@ -332,6 +333,7 @@ func (s *Server) SendLeaderAddressToClients() error {
 	for rows.Next() {
 		var rec string
 		err = rows.Scan(&rec)
+		fmt.Printf("SENDING LEADER ADDRESS TO %s\n", rec)
 		if err != nil {
 			fmt.Println("Error parsing user IPs err")
 			rows.Close()
@@ -348,7 +350,11 @@ func (s *Server) SendLeaderAddressToClients() error {
 		//
 		go func(ip string) {
 			// ignore errors, skip inactive users
-			caller, _ := net.DialTimeout("tcp", fmt.Sprintf("%s:%d", ip, "59999"), 2*time.Second)
+			caller, err := net.DialTimeout("tcp", fmt.Sprintf("%s:%s", ip, "59999"), 2*time.Second)
+			if err != nil {
+				fmt.Println(err)
+				return
+			}
 
 			leaderAddres := &ReplicaAddress{
 				s.AddressPort.Address,
@@ -359,6 +365,7 @@ func (s *Server) SendLeaderAddressToClients() error {
 			var resp ReplicaAddress
 			rpc_client := rpc.NewClient(caller)
 			rpc_client.Call("LeaderConnManager.ReceiveLeaderAddress", leaderAddres, &resp) // ignore errors, skip inactive users
+			fmt.Println("RPC UPDATE COMPLETE")
 		}(ip)
 	}
 	return nil
@@ -561,6 +568,8 @@ func (r *ReplicationHandler) BullyElection(msg *BullyMessage, resp *ReplicationR
 			go r.InitiateElection() // THIS SHOULD PROBABLY NOT BE CALLED IN THE RPC...
 		}
 	}
+
+	
 	return nil
 }
 
@@ -728,7 +737,9 @@ func (r *ReplicationHandler) InitiateElection() bool {
 		}
 
 	}
-
+	if (r.server.LeaderID == r.server.PID) {
+		r.server.SendLeaderAddressToClients()
+	}
 	return false
 }
 
@@ -1016,7 +1027,8 @@ func main() {
 		client.Close()
 	}
 
-	if server.LeaderID != server.PID {
+	// only kick off election if we are higher PID
+	if server.LeaderID < server.PID {
 		replicationHandler.InitiateElection()
 	}
 

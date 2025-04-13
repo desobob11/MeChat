@@ -192,13 +192,14 @@ func (l *LeaderConnManager) ReceiveLeaderAddress(message *ReplicaAddress, _ *Rep
 	defer l.Mutex.Unlock()
 	LEADER_CONN.ActiveReplica.Address = message.Address
 	LEADER_CONN.ActiveReplica.Port = message.Port
+	fmt.Printf("Leader is now: %s:%d\n", LEADER_CONN.ActiveReplica.Address, LEADER_CONN.ActiveReplica.Port)
 	return nil
 }
 
 
 
 // Handler for RPC connections
-func (l *LeaderConnManager) HandleRPC(rpc_address string) {
+func (l *LeaderConnManager) HandleRPC() {
 	// Create a new RPC server for this instance
 	rpcServer := rpc.NewServer()
 
@@ -207,8 +208,9 @@ func (l *LeaderConnManager) HandleRPC(rpc_address string) {
 
 
 	// Start listening on 5999 (hardcoded for clients)
-	listener, err := net.Listen("tcp", fmt.Sprintf("%s:%s", getLocalIP(), "59999"))
-	fmt.Println("Listening on", rpc_address)
+	//listener, err := net.Listen("tcp", fmt.Sprintf("%s:%s", getLocalIP(), "59999"))
+	listener, err := net.Listen("tcp", ":59999")
+	fmt.Println("Listening on ", getLocalIP(), "59999")
 	if err != nil {
 		fmt.Println("Failure listening for RPC calls:", err)
 		os.Exit(-1)
@@ -578,10 +580,13 @@ func main() {
 	fmt.Println("RPC connection succeeded.")
 	fmt.Println(rpc_client)
 
+
+
 	// kickoff HTTP thread for client UI
 	// communication
 	var wg sync.WaitGroup
-	wg.Add(1)
+	wg.Add(2)
+	go LEADER_CONN.HandleRPC()
 	go HTTPThread()
 	wg.Wait()
 
