@@ -54,8 +54,10 @@ export default function ChatBox() {
     const {selectedContactId, setSelectedContactId} = useGlobal();  // chat id
     const [currentInput, setCurrentInput] = useState("");   // text in input
     const {userProfile, setUserProfile} = useGlobal()   // global user profiled
+    const latestMessageCount = useRef(0);
 
-    
+    const latestMessage = useRef(null);
+
     useEffect(() => {
         if (selectedContactId !== -1) {
             GetMessages();
@@ -74,14 +76,18 @@ export default function ChatBox() {
 
 
     /**
-     * Scroll down to latest message
+     * Scroll down to latest message if new received
      */
     useEffect(() => {
-        if (latestMessage.current) {
-            latestMessage.current.scrollIntoView({ behavior: "smooth" });
+      //  alert(latestMessageCount);
+        //alert(renderedMessages.length)
+        if (latestMessageCount.current !== renderedMessages.length) {
+            latestMessageCount.current = renderedMessages.length;
+            if (latestMessage.current) {
+                latestMessage.current.scrollIntoView({ behavior: "smooth" });
+            }
         }
     }, [renderedMessages]);
-    const latestMessage = useRef(null);
 
 
 
