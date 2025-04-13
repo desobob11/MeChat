@@ -20,7 +20,12 @@ import (
 
 var ADDRESS_FILE = "replica_addrs.txt"
 var REPLICA_ADDRESSES []ReplicaAddress
-var ACTIVE_REPLICA ReplicaAddress
+var LEADER_CONN LeaderConnManager
+
+type LeaderConnManager struct {
+	ActiveReplica ReplicaAddress
+	Mutex sync.Mutex
+}
 
 type ReplicaAddress struct {
 	Address string
@@ -105,6 +110,7 @@ type IDNumber struct {
 	ID int
 }
 
+
 // =================================================
 //  HELPER FUNCTIONS
 // =================================================
@@ -165,6 +171,61 @@ func ReadReplicaAddresses(filename string) []ReplicaAddress {
 
 	return addrs
 }
+
+
+func getLocalIP() string {
+	conn, err := net.Dial("udp", "8.8.8.8:80")
+	if err != nil {
+		fmt.Println("FATAL: COULD NOT GET LOCAL ADDRESS")
+		os.Exit(-1)
+	}
+	defer conn.Close()
+
+	localAddr := conn.LocalAddr().(*net.UDPAddr)
+
+	return localAddr.IP.String()
+}
+
+
+func (l *LeaderConnManager) receiveLeaderAddress(message *ReplicaAddress, _ *ReplicaAddress) error {
+	l.Mutex.Lock()
+	defer l.Mutex.Unlock()
+	LEADER_CONN.ActiveReplica.Address = message.Address
+	LEADER_CONN.ActiveReplica.Port = message.Port
+	return nil
+}
+
+
+
+// Handler for RPC connections
+func (l *LeaderConnManager) HandleRPC(rpc_address string) {
+	// Create a new RPC server for this instance
+	rpcServer := rpc.NewServer()
+
+	// Register handlers with this specific server
+	rpcServer.RegisterName("LeaderConnManager", &LEADER_CONN)
+
+
+	// Start listening on 5999 (hardcoded for clients)
+	listener, err := net.Listen("tcp", fmt.Sprintf("%s:%s", getLocalIP(), "5999"))
+	fmt.Println("Listening on", rpc_address)
+	if err != nil {
+		fmt.Println("Failure listening for RPC calls:", err)
+		os.Exit(-1)
+	}
+
+	// Handle connections
+	for {
+		conn, err := listener.Accept()
+		if err != nil {
+			fmt.Println("Failure accepting RPC call:", err)
+			continue
+		}
+		go rpcServer.ServeConn(conn)
+	}
+}
+
+
 
 // =================================================
 //  HTTP ENDPOINT FUNCTIONS
@@ -243,9 +304,9 @@ func ConfirmLeader() bool {
 			msg := IDNumber{-1}
 			client := rpc.NewClient(caller)
 			client.Call("MessageHandler.GetPID", msg, &pid)
-			ACTIVE_REPLICA = REPLICA_ADDRESSES[pid.ID]
-			rpc_client, _ = rpc.Dial("tcp", fmt.Sprintf("%s:%d", ACTIVE_REPLICA.Address, ACTIVE_REPLICA.Port))
-			fmt.Printf("Leader is now: %s:%d\n", ACTIVE_REPLICA.Address, ACTIVE_REPLICA.Port)
+			LEADER_CONN.ActiveReplica = REPLICA_ADDRESSES[pid.ID]
+			rpc_client, _ = rpc.Dial("tcp", fmt.Sprintf("%s:%d", LEADER_CONN.ActiveReplica.Address, LEADER_CONN.ActiveReplica.Port))
+			fmt.Printf("Leader is now: %s:%d\n", LEADER_CONN.ActiveReplica.Address, LEADER_CONN.ActiveReplica.Port)
 			return true	// leader found
 		}
 	}
@@ -499,7 +560,7 @@ func HTTPThread() {
 }
 
 
-
+/*
 func main() {
 	// parse possibl addresses
 	REPLICA_ADDRESSES = ReadReplicaAddresses(ADDRESS_FILE)
@@ -513,7 +574,7 @@ func main() {
 	}
 
 	// output leader ID, debug after connect
-	fmt.Printf("Leader: %s:%d\n", ACTIVE_REPLICA.Address, ACTIVE_REPLICA.Port)
+	fmt.Printf("Leader: %s:%d\n", LEADER_CONN.ActiveReplica.Address, LEADER_CONN.ActiveReplica.Port)
 	fmt.Println("RPC connection succeeded.")
 	fmt.Println(rpc_client)
 
@@ -525,3 +586,4 @@ func main() {
 	wg.Wait()
 
 }
+*/
