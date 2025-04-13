@@ -306,7 +306,6 @@ func (s *Server) cacheIP(conn net.Conn) error {
 
 	// execute script against database
 	_, err := s.DB.Exec(script, conn.RemoteAddr().String())
-
 	// handle error
 	if err != nil {
 		//fmt.Println("Error caching ip: likely duplicate ") // should print out rows changed here eventually
@@ -391,13 +390,11 @@ func (s *Server) HandleRPC(rpc_address string, msg *MessageHandler, rep *Replica
 	for {
 		conn, err := listener.Accept()
 		if err != nil {
-			log.Println("Failure accepting RPC call:", err)
+			fmt.Println("Failure accepting RPC call:", err)
 			continue
 		}
-		go s.cacheIP(conn)
 		go rpcServer.ServeConn(conn)
-		fmt.Println(conn.RemoteAddr().Network())
-		fmt.Println(conn.RemoteAddr().String())
+		go s.cacheIP(conn)
 
 	}
 }
@@ -907,15 +904,16 @@ func (r *ReplicationHandler) CatchupReplica(msg IDNumber, resp *IDNumber) error 
 		fmt.Printf("Error: %s", err)
 	}
 
-	req := ReplicationRequest{Entries: reqs}
+	req := &ReplicationRequest{Entries: reqs}
 	addr := r.server.BackupNodes[msg.ID]
 	//	for _, req := range s.BackupNodes {
 
 	addr_string := net.JoinHostPort(addr.Address, fmt.Sprintf("%d", addr.Port))
-	caller, err := net.DialTimeout("tcp", addr_string, 3*time.Second) // need a timeout here, else this hangs if backup not reachable
+	caller, err := net.DialTimeout("tcp", addr_string, 2*time.Second) // need a timeout here, else this hangs if backup not reachable
 
 	if err != nil {
-		log.Printf("Node %d: Failed to connect to backup %s: %v", r.server.PID, addr_string, err)
+		fmt.Printf("Node %d: Failed to connect to backup %s: %v", r.server.PID, addr_string, err)
+		return err
 	}
 
 	var to_resp ReplicationResponse
@@ -925,8 +923,10 @@ func (r *ReplicationHandler) CatchupReplica(msg IDNumber, resp *IDNumber) error 
 
 	if err != nil {
 		log.Printf("Node %d: Failed to replicate to %s: %v", r.server.PID, addr_string, err)
+		return err
 	} else if !to_resp.Success {
 		log.Printf("Node %d: Replication to %s failed: %s", r.server.PID, addr_string, to_resp.Message)
+		return err
 	}
 	//}
 	resp.ID = -1
