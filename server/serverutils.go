@@ -13,6 +13,7 @@ import (
 	"strconv"
 	"database/sql"
 	_ "modernc.org/sqlite"
+	"sync"
 )
 
 // =================================================
@@ -85,6 +86,9 @@ type AddContactMessage struct {
 	ContactId int
 }
 
+
+var dbMutex sync.Mutex
+
 // =================================================
 
 
@@ -130,8 +134,9 @@ func BuildDatabase(database_name string) (*sql.DB, error) {
 		fmt.Println("Error creating database file.")
 		return nil, err
 	}
-
+	dbMutex.Lock()
 	_, err = db.Exec(users_script)
+	dbMutex.Unlock()
 	if err != nil {
 		fmt.Println("Error creating users table. ")
 		return nil, err

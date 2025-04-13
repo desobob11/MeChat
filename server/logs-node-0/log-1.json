@@ -1,0 +1,12 @@
+{
+  "index": 1,
+  "sql": "INSERT INTO users (\n\t\t[password], \n\t\t[email], \n\t\t[firstname], \n\t\t[lastname], \n\t\t[descr])\n\tVALUES (?, ?, ?, ?, ?);",
+  "args": [
+    "ca978112ca1bbdcafac231b39a23dc4da786eff8147c4e72b9807785afee48bb",
+    "des@des.ca",
+    "Des",
+    "Des",
+    "Des"
+  ],
+  "timestamp": "2025-04-13T14:22:15.8617837-06:00"
+}
