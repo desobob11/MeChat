@@ -999,8 +999,7 @@ func main() {
 
 	REPLICA_ADDRESSES = ReadReplicaAddresses(ADDRESS_FILE) // all addresses, including own
 
-	// Start the leader first (PID 0)
-	server := spawn_server(0)
+	server := spawn_server(int(ADDRESS_OFFSET))
 
 	messageHandler = MessageHandler{server: server}
 	replicationHandler := ReplicationHandler{server: server}
@@ -1036,7 +1035,7 @@ func main() {
 	}
 
 	// only kick off election if we are higher PID
-	if server.LeaderID != server.PID {
+	if server.LeaderID < server.PID {
 		replicationHandler.InitiateElection()
 	} else {
 		// let any clients know that we are the leader
