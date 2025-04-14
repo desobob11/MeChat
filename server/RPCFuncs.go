@@ -1,4 +1,4 @@
-package server
+package main
 
 /*
 	This file contains structs and functions that

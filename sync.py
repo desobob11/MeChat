@@ -1,6 +1,6 @@
 
 
-files = ["server.go", "serverutils.go", "serverManager.go"]
+files = ["server.go", "RPCFuncs.go", "SyncConsistency.go", "FaultTolerance.go"]
 
 for i in range(4):
     for f in files:

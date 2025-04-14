@@ -1,4 +1,6 @@
-package server
+package main
+
+
 /*
 	Source code that encapsulates synchronization
 	and consistency.

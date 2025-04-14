@@ -1,4 +1,4 @@
-package server
+package main
 
 /*
 	Main drive for server source code.
@@ -197,7 +197,7 @@ func (s *Server) SendLeaderAddressToClients() error {
 		//
 		go func(ip string) {
 			// ignore errors, skip inactive users
-			caller, err := net.DialTimeout("tcp", fmt.Sprintf("%s:%s", ip, "59999"), 2*time.Second)
+			caller, err := net.DialTimeout("tcp", fmt.Sprintf("%s:%s", ip, "59999"), 200*time.Millisecond)
 			if err != nil {
 				return
 			}
@@ -212,6 +212,7 @@ func (s *Server) SendLeaderAddressToClients() error {
 			rpc_client := rpc.NewClient(caller)
 			rpc_client.Call("LeaderConnManager.ReceiveLeaderAddress", leaderAddres, &resp) // ignore errors, skip inactive users
 		}(ip)
+		fmt.Println(addr)
 	}
 	fmt.Println("Address update sent to clients")
 	return nil

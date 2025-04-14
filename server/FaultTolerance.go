@@ -1,4 +1,4 @@
-package server
+package main
 /*
 	Source code that encapsulates leader-election
 	and fault tolerance logic
@@ -19,6 +19,19 @@ import (
 	"net/rpc"
 	"time"
 )
+
+/*
+	Heartbeat RPC ping to leader, sends STATUSOK ACK
+	if leader is online
+*/
+func (r *ReplicationHandler) IsStatusOK(req *ReplicationRequest, resp *ReplicationResponse) error {
+	r.mutex.Lock()
+	defer r.mutex.Unlock()
+	resp.Success = true
+	resp.LastIndex = -1
+	resp.Message = "STATUSOK"
+	return nil
+}
 
 /*
 	This function is executed by the heartbeat monitor thread
@@ -146,12 +159,8 @@ func (r *ReplicationHandler) InitiateElection() bool {
 
 		}
 
-			// formula from class for expected time
-		t_trans := 100 * time.Millisecond // upper bound
-		t_proc := 25 * time.Millisecond   // upper bound
-		t := (2 * t_trans) + t_proc
 
-		time.Sleep(t)
+		time.Sleep(1*time.Second)
 
 		// no responses, send leader to all other active replicas
 		if electionResponse.LastIndex == -1 {
@@ -169,7 +178,7 @@ func (r *ReplicationHandler) InitiateElection() bool {
 			r.server.SendLeaderAddressToClients()
 
 		} else {
-			time.Sleep(t)
+			time.Sleep(1*time.Second)
 			r.server.Running = false
 		}
 

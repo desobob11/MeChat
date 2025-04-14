@@ -129,7 +129,6 @@ RPC call.
 func RemoteProcedureCall(funcName string, args any, reply any) error {
 	// need a mutex to ensure rpc_client is in usable state after receiving new address
 	for {
-		fmt.Println(rpc_client)
 		if rpc_client != nil { // if rpc_client is nil, wait til it isnt
 
 			err := rpc_client.Call(funcName, args, reply) // this
@@ -212,8 +211,8 @@ func ReadReplicaAddresses(filename string) []ReplicaAddress {
 }
 
 /*
-	Conventional Go method of obtaining this
-	machines IP4 address
+Conventional Go method of obtaining this
+machines IP4 address
 */
 func getLocalIP() string {
 	// send a UDP packet out into the void!
@@ -229,10 +228,10 @@ func getLocalIP() string {
 }
 
 /*
-	RPC registered function that runs on a separate thread.
+RPC registered function that runs on a separate thread.
 
-	When a new leader replica is assigned after an election, that leader will send
-	its address to historical client address by remotely invoking this function
+When a new leader replica is assigned after an election, that leader will send
+its address to historical client address by remotely invoking this function
 */
 func (l *LeaderConnManager) ReceiveLeaderAddress(message *ReplicaAddress, _ *ReplicaAddress) error {
 	// ensure we are safe to update rpc_client, it could
@@ -250,12 +249,10 @@ func (l *LeaderConnManager) ReceiveLeaderAddress(message *ReplicaAddress, _ *Rep
 	return nil
 }
 
-
-
 /*
-	Registers RPC objects and starts/runs the RPC server
+Registers RPC objects and starts/runs the RPC server
 
-	This function is intended to be run on a separate thread
+This function is intended to be run on a separate thread
 */
 func (l *LeaderConnManager) HandleRPC() {
 
