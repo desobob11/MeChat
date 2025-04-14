@@ -4,8 +4,8 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	_ "errors"
 	"fmt"
-	"github.com/rs/cors"
 	"io"
 	_ "log"
 	"net"
@@ -16,7 +16,8 @@ import (
 	"strings"
 	"sync"
 	"time"
-	_"errors"
+
+	"github.com/rs/cors"
 )
 
 var ADDRESS_FILE = "replica_addrs.txt"
@@ -126,32 +127,34 @@ Function that acts as a wrapper around a Golang
 RPC call.
 */
 func RemoteProcedureCall(funcName string, args any, reply any) error {
+	// need a mutex to ensure rpc_client is in usable state after receiving new address
 	for {
-		err := rpc_client.Call(funcName, args, reply)		// this
-		if err == nil {
-			break
+		fmt.Println(rpc_client)
+		if rpc_client != nil { // if rpc_client is nil, wait til it isnt
+
+			err := rpc_client.Call(funcName, args, reply) // this
+			if err == nil {
+				break
+			}
+
+			/*
+				net.Error not applicable here, for now
+				var netErr net.Error
+				if !errors.As(err, &netErr) {
+					fmt.Println("JUST NET ERROR")
+					break	// if it is NOT a network error, but say an SQL query
+							// error (incorrect password, etc) then that is ok
+				}
+
+			*/
+
+			// failing to connect to RPC is not a net.Error, but there
+			// is no rpc.Error type. This is the error string I was getting,
+			//	so checking against this manually
+			if !(strings.Contains(err.Error(), "connection is shut down")) {
+				break
+			}
 		}
-
-
-		/*
-		net.Error not applicable here, for now
-		var netErr net.Error
-		if !errors.As(err, &netErr) {
-			fmt.Println("JUST NET ERROR")
-			break	// if it is NOT a network error, but say an SQL query
-					// error (incorrect password, etc) then that is ok
-		}
-					
-		*/
-
-		// failing to connect to RPC is not a net.Error, but there
-		// is no rpc.Error type. This is the error string I was getting,
-		//	so checking against this manually
-		if !(strings.Contains(err.Error(), "connection is shut down")) {
-			break
-		}
-
-
 		time.Sleep(1 * time.Second)
 	}
 	return nil
@@ -195,6 +198,9 @@ func ReadReplicaAddresses(filename string) []ReplicaAddress {
 	lines := strings.Split(strings.ReplaceAll(text, "\r\n", "\n"), "\n")
 
 	for _, replica := range lines {
+		if len(strings.Split(replica, `:`)) == 1 {
+			continue
+		}
 		addr := strings.Split(replica, ":")[0]
 		port, _ := strconv.ParseUint(strings.Split(replica, ":")[1], 10, 16)
 		addrs = append(addrs, ReplicaAddress{addr, uint16(port)})
