@@ -192,9 +192,6 @@ export default function ChatList() {
         return () => clearInterval(interval);
     }, []);
 
-    useEffect(() => {
-    }, [contacts]);
-
 
 
     const handleInputChange = (e) => {

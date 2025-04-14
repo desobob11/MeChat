@@ -471,7 +471,7 @@ func Login(w http.ResponseWriter, req *http.Request) {
 	err := RemoteProcedureCall("MessageHandler.Login", messageToBack, &response)
 
 	// handle errors, send appropriate HTTP respone to user webapp UI
-	if err != nil {
+	if err != nil || response.UserId == 0 {
 		fmt.Println("Error response from create user RPC ", response)
 		w.WriteHeader(http.StatusBadRequest)
 	} else {
