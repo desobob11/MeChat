@@ -177,36 +177,49 @@ func (r *ReplicationHandler) InitiateElection() bool {
 	return false
 }
 
-
+/*
+	RPC, callee will process leader message
+*/
 func (r *ReplicationHandler) BullyLeader(msg *BullyMessage, resp *ReplicationResponse) error {
 	r.mutex.Lock()
 	defer r.mutex.Unlock()
+
+	// I am not running, this is my leader
 	r.server.LeaderID = msg.PID
 	r.server.Running = false
 	return nil
 }
 
+
+/*
+	RPC, callee will process election message
+*/
 func (r *ReplicationHandler) BullyElection(msg *BullyMessage, resp *ReplicationResponse) error {
 	r.mutex.Lock()
 	defer r.mutex.Unlock()
+
+	// if I am higher, I should try electing myself
 	if msg.PID < r.server.PID {
-		resp.LastIndex = r.server.PID // bullied it
+		resp.LastIndex = r.server.PID 
 		if !r.server.Running {
-			go r.InitiateElection() // THIS SHOULD PROBABLY NOT BE CALLED IN THE RPC...
+			// kick off my election in new thread
+			go r.InitiateElection()
 		}
 	}
-
 	return nil
 }
 
-
+/*
+	This is the heartbeat monitor 
+*/
 func (r *ReplicationHandler) BullyAlgorithmThread() {
 	for {
 		for !r.BullyFailureDetector() { // check for leader every five seconds
 			fmt.Printf("Leader %d is online... \n", r.server.LeaderID)
 			fmt.Printf("Current time: %s | Offset is %fs \n", r.server.getTime().Format("15:04:05.000"), r.server.TimestampOffset.Seconds())
 
-			time.Sleep(5 * time.Second)
+			// 1 second heartbeat interval (should this be changed?)
+			time.Sleep(1 * time.Second)
 		}
 
 		// leader is dead
