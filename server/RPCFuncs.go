@@ -1,11 +1,8 @@
 package server
 
 /*
-	Secondary back-end server source file.
-	
-	Contains logic for accessing SQL DB,
-	RPC interfaces for client-server communication
-
+	This file contains structs and functions that
+	facilitate RPC communication with clients.
 */
 
 import (
