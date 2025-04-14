@@ -111,6 +111,10 @@ type IDNumber struct {
 	ID int
 }
 
+// Mutex that synchronizes user inputs
+// User clicks and interactions
+// are queued in a FIFO mutex
+// Each HTTP endpoint acquires a lock on this mutex
 var userMutex sync.Mutex
 
 // =================================================

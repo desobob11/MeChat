@@ -340,9 +340,7 @@ func (s *Server) SendLeaderAddressToClients() error {
 	for rows.Next() {
 		var rec string
 		err = rows.Scan(&rec)
-		fmt.Printf("SENDING LEADER ADDRESS TO %s\n", rec)
 		if err != nil {
-			fmt.Println("Error parsing user IPs err")
 			rows.Close()
 			return err
 		}
@@ -359,7 +357,6 @@ func (s *Server) SendLeaderAddressToClients() error {
 			// ignore errors, skip inactive users
 			caller, err := net.DialTimeout("tcp", fmt.Sprintf("%s:%s", ip, "59999"), 2*time.Second)
 			if err != nil {
-				fmt.Println(err)
 				return
 			}
 
@@ -372,9 +369,9 @@ func (s *Server) SendLeaderAddressToClients() error {
 			var resp ReplicaAddress
 			rpc_client := rpc.NewClient(caller)
 			rpc_client.Call("LeaderConnManager.ReceiveLeaderAddress", leaderAddres, &resp) // ignore errors, skip inactive users
-			fmt.Println("RPC UPDATE COMPLETE")
 		}(ip)
 	}
+	fmt.Println("Address update sent to clients")
 	return nil
 }
 
@@ -1009,7 +1006,7 @@ func main() {
 	replicationHandler := ReplicationHandler{server: server}
 
 	// Start RPC server
-	go server.HandleRPC(fmt.Sprintf("%s:%d", server.AddressPort.Address, server.AddressPort.Port), &messageHandler, &replicationHandler)
+	go server.HandleRPC(fmt.Sprintf(":%d",server.AddressPort.Port), &messageHandler, &replicationHandler)
 
 	time.Sleep(1 * time.Second)
 
