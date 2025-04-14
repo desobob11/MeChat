@@ -34,12 +34,11 @@ type ReplicaAddress struct {
 	Port    uint16
 }
 
+// LogStatus for consistent logs
 type LogStatus struct {
 	LogIndex int
 }
 
-var ADDRESS_OFFSET uint32
-var TIMESTAMP_OFFSET int = 0
 
 // Server struct to encapsulate server state
 type Server struct {
@@ -83,6 +82,8 @@ type ReplicationResponse struct {
 	Message   string `json:"message,omitempty"`
 }
 
+// Used during heartbeat ping, leader should provide
+// its ID as an ACK
 type IDNumber struct {
 	ID int
 }
@@ -105,21 +106,19 @@ type ReplicationHandler struct {
 	server *Server
 }
 
-/*
+// Server's PID, based on line of address in address file
+var ADDRESS_OFFSET uint32
 
-class Message {
-    constructor(msg, timestamp, recv) {
-        this.msg = msg;
-        this.timestamp = timestamp;
-        this.recv = recv;
-    }
-}
-*/
+// changes during synchronization process
+var TIMESTAMP_OFFSET int = 0
 
+// store of replica addresses at startup
 var ADDRESS_FILE = "replica_addrs.txt"
+
 var REPLICA_ADDRESSES []ReplicaAddress
 
-// need global, its mutex acts as DB write mutex
+// MessageHandler, same as defined in ServerUtils.
+// Defined as a global for easy access 
 var messageHandler MessageHandler	
 
 // function to read in hard-saved replica addresses
