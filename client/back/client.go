@@ -198,6 +198,8 @@ func ReadReplicaAddresses(filename string) []ReplicaAddress {
 	lines := strings.Split(strings.ReplaceAll(text, "\r\n", "\n"), "\n")
 
 	for _, replica := range lines {
+		// cross platform check here, based on platform
+		// address file may contain unexpected newline character at EOF
 		if len(strings.Split(replica, `:`)) == 1 {
 			continue
 		}
@@ -209,31 +211,52 @@ func ReadReplicaAddresses(filename string) []ReplicaAddress {
 	return addrs
 }
 
+/*
+	Conventional Go method of obtaining this
+	machines IP4 address
+*/
 func getLocalIP() string {
+	// send a UDP packet out into the void!
+	//	(oddly enough, we need a conn to be able to determine our own IP!!!)
 	conn, err := net.Dial("udp", "8.8.8.8:80")
 	if err != nil {
 		fmt.Println("FATAL: COULD NOT GET LOCAL ADDRESS")
 		os.Exit(-1)
 	}
 	defer conn.Close()
-
 	localAddr := conn.LocalAddr().(*net.UDPAddr)
-
 	return localAddr.IP.String()
 }
 
+/*
+	RPC registered function that runs on a separate thread.
+
+	When a new leader replica is assigned after an election, that leader will send
+	its address to historical client address by remotely invoking this function
+*/
 func (l *LeaderConnManager) ReceiveLeaderAddress(message *ReplicaAddress, _ *ReplicaAddress) error {
+	// ensure we are safe to update rpc_client, it could
+	// be in use in an RPC call to remote on our end!
 	l.Mutex.Lock()
 	defer l.Mutex.Unlock()
+
+	// parse IP and port from input parameter
 	LEADER_CONN.ActiveReplica.Address = message.Address
 	LEADER_CONN.ActiveReplica.Port = message.Port
-	// reset RPC client
+
+	// connect to the new RPC server (leader replica)
 	rpc_client, _ = rpc.Dial("tcp", fmt.Sprintf("%s:%d", LEADER_CONN.ActiveReplica.Address, LEADER_CONN.ActiveReplica.Port))
 	fmt.Printf("Leader is now: %s:%d\n", LEADER_CONN.ActiveReplica.Address, LEADER_CONN.ActiveReplica.Port)
 	return nil
 }
 
-// Handler for RPC connections
+
+
+/*
+	Registers RPC objects and starts/runs the RPC server
+
+	This function is intended to be run on a separate thread
+*/
 func (l *LeaderConnManager) HandleRPC() {
 
 	// Create a new RPC server for this instance

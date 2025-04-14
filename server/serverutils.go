@@ -1,4 +1,4 @@
-package main
+package server
 
 /*
 	Secondary back-end server source file.
