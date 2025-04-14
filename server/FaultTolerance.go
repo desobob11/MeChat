@@ -70,53 +70,91 @@ func (r *ReplicationHandler) BullyFailureDetector() bool {
 	return false
 }
 
-
+/*
+	This function will return the ID of a replica, if invoked
+	via RPC
+*/
 func (r *MessageHandler) GetPID(msg *IDNumber, resp *IDNumber) error {
 	resp.ID = r.server.PID
 	return nil
 }
 
+/*
+	A wrapper function to make sending bully messages simpler
+	
+	Replica address, RPC function name, and type of bully message (LEADER / ELECTION)
+	must be specified
+*/
 func SendBullyMessage(replica ReplicaAddress, funcName string, msg BullyMessage, resp *ReplicationResponse) error {
 	addr_string := net.JoinHostPort(replica.Address, fmt.Sprintf("%d", replica.Port))
-	caller, err := net.DialTimeout("tcp", addr_string, 1*time.Second) // need a timeout here, else this hangs if backup not reachable
+
+	// try connection to replica address for
+	// rpc call
+	caller, err := net.DialTimeout("tcp", addr_string, 1*time.Second) 
 	if err != nil {
 		fmt.Printf("Replica at %s is offline\n", addr_string)
 		return err
 	}
+
+	// invoke RPC, funcName specifies which sort of message we would like to send
 	client := rpc.NewClient(caller)
-	err = client.Call(fmt.Sprintf("ReplicationHandler.%s", funcName), msg, resp) // skipping error here as well
+	err = client.Call(fmt.Sprintf("ReplicationHandler.%s", funcName), msg, resp) 
 	return err
 }
 
+
+/*
+	Main Bully Algorithm election algorithm
+
+	Derived from pseudocode provided in class
+
+*/
 func (r *ReplicationHandler) InitiateElection() bool {
 	r.server.Running = true
+
+	// debug
 	fmt.Println("CALLING ELECTION")
 
+	// if I am max ID, then I must be the new leader!
 	if r.server.PID == len(r.server.BackupNodes)-1 {
 		for _, replica := range r.server.BackupNodes {
 			if IsAddressSelf(r.server.AddressPort, replica) { // skip crashed leader and self
 				continue
 			}
+
+			// bully others via RPC
 			var resp ReplicationResponse
 			msg := BullyMessage{PID: r.server.PID, Message: "LEADER"}
 			r.server.LeaderID = r.server.PID
 			r.server.Running = false
 			SendBullyMessage(replica, "BullyLeader", msg, &resp)
+
+			// I won, send my address to cached client addresses
 			r.server.SendLeaderAddressToClients()
 		}
 	} else {
+		// otherwise, let's see if any higher PIDs are above me
 		electionResponse := ReplicationResponse{LastIndex: -1}
 		for j, replica := range r.server.BackupNodes {
 			if j <= r.server.PID { // skip crashed leader and self
 				continue
 			}
+
+			// try sending election to others
 			msg := BullyMessage{PID: r.server.PID, Message: "ELECTION"}
 			SendBullyMessage(replica, "BullyElection", msg, &electionResponse)
 
 		}
-		time.Sleep(1 * time.Second) // probably much too long
 
-		if electionResponse.LastIndex == -1 { // no response
+			// formula from class for expected time
+		t_trans := 100 * time.Millisecond // upper bound
+		t_proc := 25 * time.Millisecond   // upper bound
+		t := (2 * t_trans) + t_proc
+
+		time.Sleep(t)
+
+		// no responses, send leader to all other active replicas
+		if electionResponse.LastIndex == -1 {
 			r.server.LeaderID = r.server.PID
 			for j, replica := range r.server.BackupNodes {
 				// skip self
@@ -126,15 +164,13 @@ func (r *ReplicationHandler) InitiateElection() bool {
 				msg := BullyMessage{PID: r.server.PID, Message: "LEADER"}
 				SendBullyMessage(replica, "BullyLeader", msg, nil)
 			}
+
+			// I won, send my address to cached client addresses
 			r.server.SendLeaderAddressToClients()
 
 		} else {
-			time.Sleep(1 * time.Second)
-			//if r.server.LeaderID == current_leader {			// no leader change
-			//	r.InitiateElection()
-			//} else {			// other process already told me to update my leader
+			time.Sleep(t)
 			r.server.Running = false
-			//}
 		}
 
 	}
